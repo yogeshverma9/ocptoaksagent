@@ -109,6 +109,7 @@ stages:
   # ============================================================
   - stage: ForceConversion
     displayName: "force-conversion"
+    dependsOn: [] # independent of Conversion - it must not inherit Conversion's Skipped status
     condition: and(succeeded(), eq(${{ parameters.forceConvert }}, true))
 
     jobs:
