@@ -22,6 +22,9 @@ Rules:
   resolve, remove or rewrite it.
 - Only change what is necessary to finish the AKS migration or fix a defect
   named in FINDINGS below. Do not restructure things that are already correct.
+- Only add livenessProbe/readinessProbe to a Deployment's container spec.
+  Never add, mention, or explain probes for any other kind (HPA, Service,
+  Ingress, PVC, etc.) or file.
 - If nothing needs to change, return the AFTER content unchanged.
 - Return ONLY the final file content. No explanation, no markdown code
   fences, no commentary before or after.
@@ -115,13 +118,16 @@ def _build_prompt(rel: str, before: str, after: str, findings: list[Finding], st
         for f in findings:
             lines.append(f"[{f.severity.value}] {f.rule_id} {f.title}: {f.detail}")
         lines.append("")
-    lines += [
-        "--- RELEVANT STANDARDS ---",
-        f"ingress class: {standards.get('ingress', {}).get('class')}",
-        f"memory units: {standards.get('resources', {}).get('memoryUnits')}",
-        f"probes required: liveness={standards.get('probes', {}).get('requireLiveness')}, "
-        f"readiness={standards.get('probes', {}).get('requireReadiness')}",
-    ]
+    lines.append("--- RELEVANT STANDARDS ---")
+    if "kind: Ingress" in after:
+        lines.append(f"ingress class: {standards.get('ingress', {}).get('class')}")
+    if "kind: Deployment" in after:
+        lines.append(f"memory units: {standards.get('resources', {}).get('memoryUnits')}")
+        lines.append(
+            f"probes required (Deployment containers only): "
+            f"liveness={standards.get('probes', {}).get('requireLiveness')}, "
+            f"readiness={standards.get('probes', {}).get('requireReadiness')}"
+        )
     return "\n".join(lines)
 
 
