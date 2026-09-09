@@ -29,9 +29,27 @@ Rules:
 
 _FENCE_RE = re.compile(r"^```[a-zA-Z0-9_-]*\n|\n```\s*$")
 
+# Some models echo the prompt's own "--- AFTER (...) ---" section marker and
+# append a "--- CHANGES MADE ---"-style explanation afterwards, despite being
+# told to return only the file content - keep just what's between the
+# echoed "AFTER" marker and the next "---" marker, dropping the commentary.
+_AFTER_SECTION_RE = re.compile(
+    r"^-{2,}\s*AFTER\b.*?-{2,}\s*$\n(.*?)(?=\n-{2,}|\Z)",
+    re.IGNORECASE | re.MULTILINE | re.DOTALL,
+)
+
 
 def _strip_fences(text: str) -> str:
     return _FENCE_RE.sub("", text.strip())
+
+
+def _strip_commentary(text: str) -> str:
+    m = _AFTER_SECTION_RE.search(text)
+    return m.group(1).strip() if m else text
+
+
+def _clean_response(text: str) -> str:
+    return _strip_fences(_strip_commentary(text))
 
 
 def _cache_key(*parts: str) -> str:
@@ -157,7 +175,7 @@ def refine_files(
         if on_file:
             on_file(rel, cached is not None)
         if cached is not None:
-            candidate = _strip_fences(cached)
+            candidate = _clean_response(cached)
             replayed = True
         else:
             try:
@@ -176,7 +194,7 @@ def refine_files(
                                  "the provider endpoint is unreachable (check LLM_ENDPOINT).",
                 ))
                 continue
-            candidate = _strip_fences(raw)
+            candidate = _clean_response(raw)
             cache.put(key, candidate, {"path": rel, "model": getattr(provider, "model", "")})
             replayed = False
 
