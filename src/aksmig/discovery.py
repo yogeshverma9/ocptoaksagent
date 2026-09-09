@@ -95,7 +95,7 @@ def discover(root: Path) -> Inventory:
         rel = path.relative_to(root).as_posix()
         if any(part in skip for part in path.relative_to(root).parts[:-1]):
             continue
-        if path.suffix.lower() not in {".yaml", ".yml", ""} and not path.name.lower().startswith("dockerfile"):
+        if path.suffix.lower() not in {".yaml", ".yml", ".tpl", ""} and not path.name.lower().startswith("dockerfile"):
             continue
         try:
             text = path.read_text(encoding="utf-8")
