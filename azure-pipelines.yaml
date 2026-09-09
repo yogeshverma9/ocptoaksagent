@@ -77,7 +77,7 @@ stages:
   # ============================================================
   - stage: Conversion
     displayName: "Conversion"
-    condition: and(succeeded(), ne('${{ parameters.forceConvert }}', true))
+    condition: and(succeeded(), ne(${{ parameters.forceConvert }}, true))
 
     jobs:
       - job: ConversionJob
@@ -109,7 +109,7 @@ stages:
   # ============================================================
   - stage: ForceConversion
     displayName: "force-conversion"
-    condition: and(succeeded(), eq('${{ parameters.forceConvert }}', true))
+    condition: and(succeeded(), eq(${{ parameters.forceConvert }}, true))
 
     jobs:
       - job: ForceConversionJob
