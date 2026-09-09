@@ -34,7 +34,19 @@ echo "--- Running aks-migrator against $OCP_SOURCE_PATH ---"
 cd "$SELF_PATH"
 chmod +x run.sh
 ./run.sh build
+
+# Exit code 2 means aks-migrator's own BLOCK verdict (fail-on-block) - still
+# push the artefacts (validation.md/findings.json/diff.patch) so reviewers
+# can see what's blocking, rather than losing them with the agent workspace.
+set +e
 OUT_DIR="$AKS_DIR" ./run.sh migrate "$OCP_SOURCE_PATH"
+MIGRATE_EXIT=$?
+set -e
+
+if [ "$MIGRATE_EXIT" -ne 0 ] && [ "$MIGRATE_EXIT" -ne 2 ]; then
+  echo "aks-migrator failed unexpectedly (exit $MIGRATE_EXIT) - not pushing any output." >&2
+  exit "$MIGRATE_EXIT"
+fi
 
 echo "--- Committing converted output back to the OCP source repo ---"
 cd "$OCP_SOURCE_PATH"
@@ -44,12 +56,22 @@ git add aks/
 
 if git diff --cached --quiet; then
   echo "No changes to commit - converted output is identical to what's already there."
-  exit 0
+  exit "$MIGRATE_EXIT"
+fi
+
+COMMIT_MSG="aks-migrator: convert OCP to AKS [skip ci]"
+if [ "$MIGRATE_EXIT" -eq 2 ]; then
+  COMMIT_MSG="aks-migrator: convert OCP to AKS (BLOCKED - see aks/validation.md) [skip ci]"
 fi
 
 # [skip ci] is a widely-recognised convention (Azure Pipelines honours
 # ***NO_CI*** / [skip ci] in the commit message) - prevents this push from
 # re-triggering a CI pipeline on the OCP source repo, if it has one.
-git commit -m "aks-migrator: convert OCP to AKS [skip ci]"
+git commit -m "$COMMIT_MSG"
 git push origin "HEAD:refs/heads/$GIT_BRANCH"
 echo "✓ Pushed converted manifests to branch '$GIT_BRANCH'"
+
+if [ "$MIGRATE_EXIT" -eq 2 ]; then
+  echo "aks-migrator reported blocking findings - see aks/validation.md in the pushed output." >&2
+  exit 2
+fi
