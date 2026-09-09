@@ -152,7 +152,7 @@ def migrate(repo, env_name, mode, workspace, out_dir, config_dir, fail_on_block,
     console.rule(f"[{colour}]VERDICT: {verdict.decision}")
     console.print(verdict.rationale)
     console.print(f"\nArtefacts written to [bold]{out}[/]: "
-                  "validation.md, findings.json, diff.patch, rendered/")
+                  "validation.md, findings.json, diff.patch, and the converted chart files")
 
     if fail_on_block and verdict.decision == "BLOCK":
         sys.exit(2)

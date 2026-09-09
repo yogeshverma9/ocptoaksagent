@@ -17,9 +17,8 @@ GIT_USER_EMAIL="${GIT_COMMIT_USER_EMAIL:-aks-migrator-bot@localhost}"
 AKS_DIR="$OCP_SOURCE_PATH/aks"
 
 if [ "$FORCE_CONVERT" != "true" ] \
-   && [ -d "$AKS_DIR/rendered" ] \
-   && [ -n "$(find "$AKS_DIR/rendered" -name '*.yaml' -print -quit 2>/dev/null)" ]; then
-  echo "✓ $AKS_DIR/rendered already exists in the OCP source repo - skipping conversion."
+   && [ -f "$AKS_DIR/verdict.json" ]; then
+  echo "✓ $AKS_DIR/verdict.json already exists in the OCP source repo - skipping conversion."
   echo "  Re-run with forceConvert=true (pipeline parameter) to regenerate."
   exit 0
 fi

@@ -110,7 +110,7 @@ golden: build
 		-v $(OUT_DIR):/aks \
 		-v $(CONFIG_DIR):/config:ro \
 		$(IMAGE) golden \
-			--candidate /aks/rendered \
+			--candidate /aks \
 			--reference /fixtures/pdfgenerator-aks \
 			--out /aks
 
