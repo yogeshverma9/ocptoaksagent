@@ -1,0 +1,18 @@
+stages:
+
+- stage: build_verification
+  dependsOn: []
+  variables:
+  - group: BILLING_DEVOPS_PDF_GENERATOR
+  displayName: Build Verification
+  jobs:
+  - template: build_verification.yaml
+
+- stage: build
+  dependsOn: [build_verification]
+  condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
+  variables:
+  - group: BILLING_DEVOPS_PDF_GENERATOR
+  displayName: Build & Push
+  jobs:
+  - template: build.yaml

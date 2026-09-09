@@ -1,0 +1,129 @@
+parameters:
+  - name: buildNumber
+    type: string
+    default: latest
+  - name: environment
+    type: string
+  - name: azureSubscription
+    type: string
+  - name: azureResourceGroup
+    type: string
+  - name: aksTargetClusterName
+    type: string
+  - name: kubernetesNamespace
+    type: string
+  - name: values
+    type: string
+
+jobs:
+  - deployment: Deploy
+    displayName: Deploy to ${{ parameters.environment }}
+    pool:
+      #name: ocp-billing-invserv1
+      name: az-dot-ci-nzn-npe
+    timeoutInMinutes: 0
+    cancelTimeoutInMinutes: 0
+    environment: ${{ parameters.environment }}
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+            - checkout: self
+              clean: true
+
+            - task: AzureCLI@2
+              displayName: "Login + Get AKS Credentials"
+              inputs:
+                azureSubscription: ${{ parameters.azureSubscription }}
+                scriptType: bash
+                scriptLocation: inlineScript
+                inlineScript: |
+                  az account show --query user
+
+                  az aks get-credentials \
+                    --resource-group ${{ parameters.azureResourceGroup }} \
+                    --name ${{ parameters.aksTargetClusterName }} \
+                    --overwrite-existing
+
+                  kubelogin convert-kubeconfig -l azurecli
+
+                  kubectl get pods --namespace ${{ parameters.kubernetesNamespace }} --request-timeout=30s
+
+            - task: AzureCLI@2
+              displayName: "Resolve Image Tag"
+              name: SetTagId
+              inputs:
+                azureSubscription: ${{ parameters.azureSubscription }}
+                scriptType: bash
+                scriptLocation: inlineScript
+                inlineScript: |
+                  az extension add --name azure-devops --allow-preview true
+
+                  az devops configure --defaults organization=https://dev.azure.com/sparknz/ project=Spark
+
+                  if [ "${{ parameters.buildNumber }}" == "latest" ]; then
+                    tag=$(az pipelines runs list \
+                      --pipeline-ids "3744" \
+                      --project Spark \
+                      --output json \
+                      --result succeeded \
+                      --tags Built \
+                      --branch ${{ replace(variables['Build.SourceBranch'], 'refs/heads/', '') }} \
+                      --query-order FinishTimeDesc \
+                      --top 1 | jq -r '.[0].buildNumber')
+
+                    if [ "$tag" == "null" ] || [ -z "$tag" ]; then
+                      tag=$(az pipelines runs list \
+                        --pipeline-ids "3744" \
+                        --project Spark \
+                        --output json \
+                        --result succeeded \
+                        --tags Built \
+                        --branch master \
+                        --query-order FinishTimeDesc \
+                        --top 1 | jq -r '.[0].buildNumber')
+                    fi
+                  else
+                    tag="${{ parameters.buildNumber }}"
+                  fi
+
+                  if [ "$tag" == "null" ] || [ -z "$tag" ]; then
+                    echo "Build tag could not be found"
+                    exit 1
+                  fi
+
+                  echo "Resolved image tag: $tag"
+                  echo "##vso[task.setVariable variable=tag;isOutput=true]$tag"
+              env:
+                AZURE_DEVOPS_EXT_PAT: $(System.AccessToken)
+
+            - task: AzureCLI@2
+              displayName: "Helm Dry Run"
+              inputs:
+                azureSubscription: ${{ parameters.azureSubscription }}
+                scriptType: bash
+                scriptLocation: inlineScript
+                inlineScript: |
+                  helm upgrade pdfgenerator-release $(Build.SourcesDirectory)/helm/ \
+                    --install \
+                    --namespace ${{ parameters.kubernetesNamespace }} \
+                    --values $(Build.SourcesDirectory)/helm/${{ parameters.values }} \
+                    --set image.tag=$(SetTagId.tag) \
+                    --dry-run \
+                    --debug
+
+            - task: AzureCLI@2
+              displayName: "Helm Upgrade"
+              inputs:
+                azureSubscription: ${{ parameters.azureSubscription }}
+                scriptType: bash
+                scriptLocation: inlineScript
+                inlineScript: |
+                  helm upgrade pdfgenerator-release $(Build.SourcesDirectory)/helm/ \
+                    --install \
+                    --namespace ${{ parameters.kubernetesNamespace }} \
+                    --values $(Build.SourcesDirectory)/helm/${{ parameters.values }} \
+                    --set image.tag=$(SetTagId.tag) \
+                    --atomic \
+                    --timeout 15m0s \
+                    --history-max 3

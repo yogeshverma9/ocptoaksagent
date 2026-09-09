@@ -1,0 +1,77 @@
+stages:
+
+# - stage: DEV
+#   dependsOn: []
+#   variables:
+#   - name: 'ENVIRONMENT'
+#     value: BILLING_DEVOPS_PDFGEN_DEV01
+#   - group: BILLING_DEVOPS_PDF_GENERATOR
+#   displayName: Deploy to Development
+#   jobs: 
+#   - template: deploy.yaml
+#     parameters:
+#       buildNumber: ${{ parameters.buildNumber }}
+#       environment: BILLING_DEVOPS_PDFGEN_DEV01
+#       endpoint: billing-pdfgen-dev01
+#       values: dev_values.yaml
+
+# - stage: INT
+#   dependsOn: [DEV]
+#   variables:
+#   - name: 'ENVIRONMENT'
+#     value: BILLING_DEVOPS_PDFGEN_NPE04
+#   - group: BILLING_DEVOPS_PDF_GENERATOR
+#   displayName: Deploy to Integration
+#   jobs:   
+#   - template: deploy.yaml
+#     parameters:
+#       buildNumber: ${{ parameters.buildNumber }}
+#       environment: BILLING_DEVOPS_PDFGEN_NPE04
+#       endpoint: billing-pdfgen-int
+#       values: int_values.yaml
+
+- stage: NFT
+  dependsOn: []
+  variables:
+  - name: 'ENVIRONMENT'
+    value: BILLING_DEVOPS_PDFGEN_NFT
+  - group: BILLING_DEVOPS_PDF_GENERATOR
+  displayName: Deploy to NFT
+  jobs:   
+  - template: deploy.yaml
+    parameters:
+      buildNumber: ${{ parameters.buildNumber }}
+      environment: BILLING_DEVOPS_PDFGEN_NFT
+      endpoint: billing-pdfgen-nft
+      values: nft_values.yaml
+
+- stage: STG
+  dependsOn: []
+  variables:
+  - name: 'ENVIRONMENT'
+    value: BILLING_DEVOPS_PDFGEN_NPE04
+  - group: BILLING_DEVOPS_PDF_GENERATOR
+  displayName: Deploy to Staging
+  jobs:   
+  - template: deploy.yaml
+    parameters:
+      buildNumber: ${{ parameters.buildNumber }}
+      environment: BILLING_DEVOPS_PDFGEN_NPE04
+      endpoint: billing-pdfgen-npe04
+      values: stg_values.yaml
+
+- stage: PRD
+  dependsOn: [STG]
+  variables:
+  - name: 'ENVIRONMENT'
+    value: BILLING_DEVOPS_PDFGEN_PROD
+  - group: BILLING_DEVOPS_PDF_GENERATOR
+  displayName: Deploy to Production
+  condition: and(succeeded(), startsWith(variables['Build.SourceBranch'], 'refs/heads/master'))
+  jobs: 
+  - template: deploy.yaml
+    parameters:
+      buildNumber: ${{ parameters.buildNumber }}
+      environment: BILLING_DEVOPS_PDFGEN_PROD
+      endpoint: billing-pdfgen-prod
+      values: prd_values.yaml

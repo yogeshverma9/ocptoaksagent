@@ -1,0 +1,132 @@
+parameters:
+  - name: buildNumber
+    type: string
+    default: latest
+
+stages:
+  - stage: DEV
+    pool:
+      name: az-dot-ci-nzn-npe
+    dependsOn: []
+    displayName: Deploy to Development
+    variables:
+      - group: BILLING_DEVOPS_PDF_GENERATOR
+    jobs:
+      - template: deploy.yaml
+        parameters:
+          buildNumber: ${{ parameters.buildNumber }}
+          environment: BILLING_DEVOPS_PDFGEN_DEV01
+          azureSubscription: tf-azurerm-spark-bill-dev-app-pdfgen-Spark
+          azureResourceGroup: rg-bill-app-dev-nzn-001
+          aksTargetClusterName: aks-bil-app-dev-nzn-002
+          kubernetesNamespace: pdfgenerator
+          values: dev_values.yaml
+
+  - stage: INT
+    pool:
+      name: az-dot-ci-nzn-npe
+    dependsOn: [DEV]
+    displayName: Deploy to Integration
+    variables:
+      - group: BILLING_DEVOPS_PDF_GENERATOR
+    jobs:
+      - template: deploy.yaml
+        parameters:
+          buildNumber: ${{ parameters.buildNumber }}
+          environment: BILLING_DEVOPS_PDFGEN_NPE04
+          azureSubscription: tf-azurerm-spark-bill-test-app-pdfgen-Spark
+          azureResourceGroup: rg-billing-app-test-nzn-001
+          aksTargetClusterName: aks-bil-app-test-nzn-001
+          kubernetesNamespace: pdfgenerator-int
+          values: int_values.yaml
+
+  - stage: NFT
+    pool:
+      name: az-dot-ci-nzn-npe
+    dependsOn: [DEV]
+    displayName: Deploy to NFT
+    variables:
+      - group: BILLING_DEVOPS_PDF_GENERATOR
+    jobs:
+      - template: deploy.yaml
+        parameters:
+          buildNumber: ${{ parameters.buildNumber }}
+          environment: BILLING_DEVOPS_PDFGEN_NFT
+          azureSubscription: tf-azurerm-spark-bill-stage-app-pdfgen-Spark
+          azureResourceGroup: rg-bill-app-stage-nzn-001
+          aksTargetClusterName: aks-bil-app-stage-nzn-001
+          kubernetesNamespace: pdfgenerator-nft
+          values: nft_values.yaml
+
+  # - stage: INT
+  #   pool:
+  #     name: az-dot-ci-nzn-npe
+  #   dependsOn: [DEV]
+  #   displayName: Deploy to Integration
+  #   variables:
+  #     - group: BILLING_DEVOPS_PDF_GENERATOR
+  #   jobs:
+  #     - template: deploy.yaml
+  #       parameters:
+  #         buildNumber: ${{ parameters.buildNumber }}
+  #         environment: BILLING_DEVOPS_PDFGEN_NPE04
+  #         azureSubscription: tf-azurerm-spark-bill-npe-app-pdfgen-Spark
+  #         azureResourceGroup: rg-bill-app-npe-nzn-001
+  #         aksTargetClusterName: aks-bil-app-npe-nzn-002
+  #         kubernetesNamespace: pdfgenerator-int
+  #         values: int_values.yaml
+
+  # - stage: NFT
+  #   pool:
+  #     name: az-dot-ci-nzn-npe
+  #   dependsOn: [DEV]
+  #   displayName: Deploy to NFT
+  #   variables:
+  #     - group: BILLING_DEVOPS_PDF_GENERATOR
+  #   jobs:
+  #     - template: deploy.yaml
+  #       parameters:
+  #         buildNumber: ${{ parameters.buildNumber }}
+  #         environment: BILLING_DEVOPS_PDFGEN_NFT
+  #         azureSubscription: tf-azurerm-spark-bill-npe-app-pdfgen-Spark
+  #         azureResourceGroup: rg-bill-app-npe-nzn-001
+  #         aksTargetClusterName: aks-bil-app-npe-nzn-002
+  #         kubernetesNamespace: pdfgenerator-nft
+  #         values: nft_values.yaml
+
+  # - stage: STG
+  #   pool:
+  #     name: az-dot-ci-nzn-npe
+  #   dependsOn: [INT, NFT]
+  #   displayName: Deploy to Staging
+  #   variables:
+  #     - group: BILLING_DEVOPS_PDF_GENERATOR
+  #   jobs:
+  #     - template: deploy.yaml
+  #       parameters:
+  #         buildNumber: ${{ parameters.buildNumber }}
+  #         environment: BILLING_DEVOPS_PDFGEN_NPE04
+  #         azureSubscription: tf-azurerm-spark-bill-npe-app-pdfgen-Spark
+  #         azureResourceGroup: rg-bill-app-npe-nzn-001
+  #         aksTargetClusterName: aks-bil-app-npe-nzn-002
+  #         kubernetesNamespace: pdfgenerator
+  #         values: stg_values.yaml
+
+  # - stage: PRD
+  #   pool:
+  #     name: az-dot-ci-nzn-prd
+  #   dependsOn: [STG]
+  #   displayName: Deploy to Production
+  #   condition: and(succeeded(), startsWith(variables['Build.SourceBranch'], 'refs/heads/master'))
+  #   variables:
+  #     - group: BILLING_DEVOPS_PDF_GENERATOR
+  #   jobs:
+  #     - template: deploy.yaml
+  #       parameters:
+  #         buildNumber: ${{ parameters.buildNumber }}
+  #         environment: BILLING_DEVOPS_PDFGEN_PROD
+  #         azureSubscription: tf-azurerm-spark-bill-prd-app-pdfgen-Spark
+  #         azureResourceGroup: rg-bill-app-prd-nzn-001
+  #         aksTargetClusterName: aks-bil-app-prd-nzn-002
+  #         kubernetesNamespace: pdfgenerator
+  #         values: prd_values.yaml

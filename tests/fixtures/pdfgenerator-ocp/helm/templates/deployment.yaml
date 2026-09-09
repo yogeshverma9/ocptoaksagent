@@ -1,0 +1,152 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.deployment.name }}
+  namespace: {{ .Values.deployment.namespace }}
+spec:
+  selector:
+    matchLabels:
+      app: pdf-gen
+  replicas: {{ .Values.deployment.replicaCount }}
+  template:
+    metadata:
+      labels:
+        app: pdf-gen
+    spec:
+      containers:
+        - name: pdf-gen
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          command: ["npm"]
+          args: ["run", "start:prod"]
+          resources:
+              limits:
+                cpu: 450m
+                memory: "800Mi"
+              requests:
+                cpu: 100m
+                memory: 200M
+          ports:
+            - containerPort: 8081
+          envFrom:
+            - secretRef:
+                name: mongodb-connection-string
+          env:
+          {{- range .Values.envVars}}
+          - name: {{ .name }}
+            value: {{ .value | quote}}
+          {{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.callDetailsDeployment.name }}
+  namespace: {{ .Values.callDetailsDeployment.namespace }}
+spec:
+  selector:
+    matchLabels:
+      app: pdf-gen
+  replicas: {{ .Values.callDetailsDeployment.replicaCount }}
+  template:
+    metadata:
+      labels:
+        app: pdf-gen
+    spec:
+      containers:
+        - name: pdf-gen-call-detail-advice
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          command: ["npm"]
+          args: ["run", "start-call-details:prod"]
+          resources:
+              limits:
+                cpu: 450m
+                memory: "800Mi"
+              requests:
+                cpu: 100m
+                memory: 200M
+          ports:
+            - containerPort: 8081
+          envFrom:
+            - secretRef:
+                name: mongodb-connection-string
+          env:
+          {{- range .Values.envVars}}
+          - name: {{ .name }}
+            value: {{ .value | quote}}
+          {{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.customerSummaryDeployment.name }}
+  namespace: {{ .Values.customerSummaryDeployment.namespace }}
+spec:
+  selector:
+    matchLabels:
+      app: pdf-gen
+  replicas: {{ .Values.customerSummaryDeployment.replicaCount }}
+  template:
+    metadata:
+      labels:
+        app: pdf-gen
+    spec:
+      containers:
+        - name: pdf-gen-customer-summary
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          command: ["npm"]
+          args: ["run", "start-customer-summary:prod"]
+          resources:
+              limits:
+                cpu: 450m
+                memory: "800Mi"
+              requests:
+                cpu: 100m
+                memory: 200M
+          ports:
+            - containerPort: 8081
+          envFrom:
+            - secretRef:
+                name: mongodb-connection-string
+          env:
+          {{- range .Values.envVars}}
+          - name: {{ .name }}
+            value: {{ .value | quote}}
+          {{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.largeInvoicesDeployment.name }}
+  namespace: {{ .Values.largeInvoicesDeployment.namespace }}
+spec:
+  selector:
+    matchLabels:
+      app: pdf-gen
+  replicas: {{ .Values.largeInvoicesDeployment.replicaCount }}
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: pdf-gen
+    spec:
+      containers:      
+        - name: pdf-gen-large-invoices
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          command: ["npm"]
+          args: ["run", "start-large:prod"]
+          resources:
+            limits:
+              cpu: 2000m
+              memory: 20Gi
+            requests:
+              cpu: 100m
+              memory: 1Gi
+          envFrom:
+            - secretRef:
+                name: mongodb-connection-string
+          env:
+          {{- range .Values.envVars}}
+          - name: {{ .name }}
+            value: {{ .value | quote}}
+          {{- end }}
+---

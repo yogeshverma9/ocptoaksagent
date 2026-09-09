@@ -1,0 +1,81 @@
+apiVersion: migration.spark.co.nz/v1
+kind: MigrationStandards
+
+ingress:
+  class: haproxy
+  apiVersion: networking.k8s.io/v1
+  requiredAnnotations:
+    haproxy.org/ssl-redirect: "false"
+  reviewAnnotations:
+    - haproxy.router.openshift.io/timeout
+
+autoscaling:
+  apiVersion: autoscaling/v2
+  requirePerDeployment: true
+
+resources:
+  memoryUnits: Mi
+  requireLimits: true
+  requireRequests: true
+  maxBurstRatio: 4
+
+probes:
+  requireLiveness: true
+  requireReadiness: true
+
+security:
+  podSecurityAdmission: restricted
+  allowRootUser: false
+  forbidWorldWritableChmod: true
+
+secrets:
+  forbidLiteralsInValuesFiles: true
+  backend: azure-key-vault-csi
+  forbiddenKeyPatterns:
+    - ".*CLIENT_ID"
+    - ".*SECRET.*"
+    - ".*PASSWORD.*"
+    - ".*_PWD"
+    - ".*TOKEN.*"
+  allowedPlaceholders:
+    - placeholder
+    - OVERWRITE_IN_PIPELINE
+    - TBC
+
+registry:
+  legacy: billing-container-registry.artifacts.internal.spark.co.nz
+  target: TBC_ACR_NAME.azurecr.io
+  requireImagePullSecret: true
+
+pipeline:
+  agentPools:
+    nonProduction: az-dot-ci-nzn-npe
+    production: az-dot-ci-nzn-prd
+  forbiddenPools:
+    - ocp-billing-invserv1
+  forbiddenTasks:
+    - HelmDeploy@0
+  requireDryRunStage: true
+  requireRbacPreflight: true
+  helmFlags:
+    - --install
+    - --atomic
+    - --timeout 15m0s
+    - --history-max 3
+
+dns:
+  legacyPattern: '(?P<app>[a-z0-9-]+)\.apps\.(?P<env>[a-z0-9]+)\.ocp\.internal\.spark\.co\.nz'
+  targetTemplate: '{app}.apps.bil.{tier}.aks.internal.spark.co.nz'
+  scanEnvVarsForResidualOcp: true
+
+forbiddenApiVersions:
+  - route.openshift.io/v1
+  - apps.openshift.io/v1
+  - image.openshift.io/v1
+  - build.openshift.io/v1
+  - security.openshift.io/v1
+  - autoscaling/v1
+
+helm:
+  requireLintStrict: true
+  requireEnvParity: true

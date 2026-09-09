@@ -1,0 +1,75 @@
+apiVersion: migration.spark.co.nz/v1
+kind: EnvironmentMatrix
+application: testnginx
+
+environments:
+  - name: dev
+    adoEnvironment: 
+    tier: dev
+    agentPool: yogi-linux-box
+    azureSubscription: svc-devops-ocp-to-aks-002
+    azureResourceGroup: CIS-data-nzn-001
+    aksTargetClusterName: devops-ocp-to-aks-001
+    kubernetesNamespace: dev
+    valuesFile: dev_values.yaml
+    ingressHost: 
+    legacyOcpEnv: dev01
+    dependsOn: []
+    status: 
+
+  # - name: int
+  #   adoEnvironment: BILLING_DEVOPS_PDFGEN_NPE04
+  #   tier: test
+  #   agentPool: az-dot-ci-nzn-npe
+  #   azureSubscription: tf-azurerm-spark-bill-test-app-pdfgen-Spark
+  #   azureResourceGroup: rg-billing-app-test-nzn-001
+  #   aksTargetClusterName: aks-bil-app-test-nzn-001
+  #   kubernetesNamespace: pdfgenerator-int
+  #   valuesFile: int_values.yaml
+  #   ingressHost: billing-pdfgenerator-int.apps.bil.test.aks.internal.spark.co.nz
+  #   legacyOcpEnv: npe04
+  #   dependsOn: [dev]
+  #   status: MIGRATED
+
+  # - name: nft
+  #   adoEnvironment: BILLING_DEVOPS_PDFGEN_NFT
+  #   tier: stg
+  #   agentPool: az-dot-ci-nzn-npe
+  #   azureSubscription: tf-azurerm-spark-bill-stage-app-pdfgen-Spark
+  #   azureResourceGroup: rg-bill-app-stage-nzn-001
+  #   aksTargetClusterName: aks-bil-app-stage-nzn-001
+  #   kubernetesNamespace: pdfgenerator-nft
+  #   valuesFile: nft_values.yaml
+  #   ingressHost: billing-pdfgenerator-nft.apps.bil.stg.aks.internal.spark.co.nz
+  #   legacyOcpEnv: npe04
+  #   dependsOn: [dev]
+  #   status: MIGRATED
+
+  # - name: stg
+  #   adoEnvironment: BILLING_DEVOPS_PDFGEN_NPE04
+  #   tier: stg
+  #   agentPool: az-dot-ci-nzn-npe
+  #   azureSubscription: TBC
+  #   azureResourceGroup: TBC
+  #   aksTargetClusterName: TBC
+  #   kubernetesNamespace: pdfgenerator
+  #   valuesFile: stg_values.yaml
+  #   ingressHost: TBC
+  #   legacyOcpEnv: npe04
+  #   dependsOn: [int, nft]
+  #   status: NOT_YET_MIGRATED
+
+  # - name: prd
+  #   adoEnvironment: BILLING_DEVOPS_PDFGEN_PROD
+  #   tier: prd
+  #   agentPool: az-dot-ci-nzn-prd
+  #   azureSubscription: tf-azurerm-spark-bill-prd-app-pdfgen-Spark
+  #   azureResourceGroup: rg-bill-app-prd-nzn-001
+  #   aksTargetClusterName: aks-bil-app-prd-nzn-002
+  #   kubernetesNamespace: pdfgenerator
+  #   valuesFile: prd_values.yaml
+  #   ingressHost: TBC
+  #   legacyOcpEnv: prod05
+  #   dependsOn: [stg]
+  #   status: NOT_YET_MIGRATED
+  #   branchCondition: refs/heads/master

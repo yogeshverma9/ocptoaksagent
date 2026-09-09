@@ -1,0 +1,19 @@
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  annotations:
+    haproxy.router.openshift.io/timeout: 10m
+    openshift.io/host.generated: "true"
+  labels:
+    app: {{ .Values.service.label }}
+  name: pdf-gen-route
+  namespace: {{ .Values.deployment.namespace }}
+spec:
+  host: {{ .Values.route.host }}
+  port:
+    targetPort: {{ .Values.service.portValue }}
+  to:
+    kind: Service
+    name: pdf-gen-service
+    weight: 100
+  wildcardPolicy: None

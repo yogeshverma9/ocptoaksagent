@@ -1,0 +1,200 @@
+trigger: none
+pr: none
+
+# This pipeline lives in "Repo B" (this repo, named "ocp-to-aks" in git,
+# hosted on GitHub - aks-migrator + this pipeline file, checked out as
+# `self`) and converts "Repo A" (the OCP source repo, ALSO on GitHub,
+# checked out below as `ocpSource`), pushing the converted output back into
+# Repo A's own `aks/` folder. See pipelines/README.md for the full
+# write-up, including the one-time GitHub service connection Repo A needs.
+resources:
+  repositories:
+    - repository: ocpSource
+      type: github
+      # <github-owner>/<repo> - the OCP source repo on GitHub.
+      name: arun-jathari/nginx-app
+      # A GitHub service connection (Project Settings > Service connections
+      # > New > GitHub) whose token has "repo" (read+write) access to
+      # arun-jathari/nginx-app - required both to check it out and to push
+      # the converted aks/ folder back. This must be the *name* of the
+      # service connection (Project Settings > Service connections page),
+      # not the repo/owner name or a URL.
+      endpoint: arun-jathari
+      ref: refs/heads/main
+
+pool:
+  name: 'yogi-linux-box'
+
+# =========================
+# RUNTIME STAGE SELECTION
+# =========================
+parameters:
+- name: forceConvert
+  displayName: 'Force re-convert even if aks/ already exists in the OCP source repo'
+  type: boolean
+  default: false
+
+# =========================
+# VARIABLES
+# =========================
+variables:
+  poolName: 'yogi-linux-box'
+
+  # Where each repo lands on disk - explicit `path:` on every checkout step
+  # below makes this predictable regardless of the repos' actual names.
+  # "ocp-to-aks" is this repo's (Repo B's) real name in git.
+  selfPath: '$(Pipeline.Workspace)/s/ocp-to-aks'
+  ocpSourcePath: '$(Pipeline.Workspace)/s/ocp-source'
+
+  # The branch checked out from Repo A, and the branch pushed back to -
+  # deliberately the same branch (see pipelines/README.md for why, and the
+  # PR-based alternative if you'd rather not push directly).
+  ocpSourceBranch: 'main'
+
+  gitCommitUserName: 'aks-migrator-bot'
+  gitCommitUserEmail: 'aks-migrator-bot@localhost'
+
+  # No target environment on purpose - aks-migrator converts every
+  # environment defined in Repo B's config/env-matrix.yaml in a single pass
+  # (they typically share one Helm chart with one *_values.yaml per
+  # environment - see AGENTIC_FRAMEWORK.md). aks-migrator always reads its
+  # config/ from wherever run.sh itself is invoked from (Repo B), not from
+  # Repo A - Repo A only supplies the OCP source files to convert.
+  failOnBlock: 'true'
+
+  # Helm lint validates every *_values.yaml aks-migrator produced (see the
+  # HelmLintValidation stage below) - no single values file to name here.
+  imageTag: 'latest'
+
+  # LLM (mandatory for aks-migrator) - see migration.env.example for the
+  # full set of knobs. Leave llmModel blank to use config/models.yaml's default.
+  llmModel: ''
+  llmTimeout: '900'
+  freezeOutput: 'true'
+
+  system.debug: 'true'
+
+
+stages:
+
+# ============================================================
+# STAGE 1: CONVERSION (idempotent - skips if aks/ already exists)
+# ============================================================
+- stage: Conversion
+  displayName: 'Conversion'
+  condition: and(succeeded(), ne('${{ parameters.forceConvert }}', true))
+
+  jobs:
+    - job: ConversionJob
+      displayName: 'Convert OCP -> AKS (skip if already converted)'
+      steps:
+        - checkout: self
+          path: s/ocp-to-aks
+
+        - checkout: ocpSource
+          path: s/ocp-source
+          persistCredentials: true   # required so the script below can `git push`
+
+        - task: Bash@3
+          displayName: 'Run aks-migrator, push aks/ back to the OCP source repo'
+          inputs:
+            targetType: filePath
+            filePath: '$(selfPath)/pipelines/scripts/convert-and-push.sh'
+            arguments: '"$(ocpSourcePath)" "$(selfPath)" false "$(ocpSourceBranch)"'
+          env:
+            FAIL_ON_BLOCK: $(failOnBlock)
+            FREEZE_OUTPUT: $(freezeOutput)
+            LLM_MODEL: $(llmModel)
+            LLM_TIMEOUT: $(llmTimeout)
+            GIT_COMMIT_USER_NAME: $(gitCommitUserName)
+            GIT_COMMIT_USER_EMAIL: $(gitCommitUserEmail)
+
+
+# ============================================================
+# STAGE 2: FORCE-CONVERSION (always regenerates + overwrites)
+# ============================================================
+- stage: ForceConversion
+  displayName: 'force-conversion'
+  condition: and(succeeded(), eq('${{ parameters.forceConvert }}', true))
+
+  jobs:
+    - job: ForceConversionJob
+      displayName: 'Convert OCP -> AKS (force - overwrite existing aks/)'
+      steps:
+        - checkout: self
+          path: s/ocp-to-aks
+
+        - checkout: ocpSource
+          path: s/ocp-source
+          persistCredentials: true
+
+        - task: Bash@3
+          displayName: 'Run aks-migrator, push aks/ back to the OCP source repo'
+          inputs:
+            targetType: filePath
+            filePath: '$(selfPath)/pipelines/scripts/convert-and-push.sh'
+            arguments: '"$(ocpSourcePath)" "$(selfPath)" true "$(ocpSourceBranch)"'
+          env:
+            FAIL_ON_BLOCK: $(failOnBlock)
+            FREEZE_OUTPUT: $(freezeOutput)
+            LLM_MODEL: $(llmModel)
+            LLM_TIMEOUT: $(llmTimeout)
+            GIT_COMMIT_USER_NAME: $(gitCommitUserName)
+            GIT_COMMIT_USER_EMAIL: $(gitCommitUserEmail)
+
+
+# ============================================================
+# STAGE 3: HELM LINT VALIDATION
+# ============================================================
+# Depends on both Conversion and force-conversion - exactly one of them
+# actually runs per the parameters.forceConvert switch above, and the other
+# is Skipped; a Skipped stage satisfies succeeded() for its dependents, so
+# this always runs after whichever one applied.
+- stage: HelmLintValidation
+  displayName: 'helm lint validation'
+  dependsOn:
+    - Conversion
+    - ForceConversion
+  condition: succeeded()
+
+  jobs:
+    - job: HelmLintJob
+      displayName: 'helm lint'
+      steps:
+        # Read-only - no persistCredentials needed. A fresh checkout here
+        # (rather than reusing an earlier stage's workspace) picks up
+        # whatever Conversion/force-conversion just pushed, since stages
+        # are not guaranteed to share a workspace even on the same agent.
+        - checkout: ocpSource
+          path: s/ocp-source
+
+        - task: Bash@3
+          displayName: 'helm lint (every environment found)'
+          inputs:
+            targetType: inline
+            script: |
+              set -euo pipefail
+              CHART="$(ocpSourcePath)/aks/rendered/helm"
+
+              if [ ! -d "$CHART" ]; then
+                echo "No converted chart found at $CHART - did Conversion/force-conversion run and push successfully?"
+                exit 1
+              fi
+
+              # aks-migrator converts every environment in one pass, so the
+              # chart holds one *_values.yaml per environment side by side -
+              # lint each one rather than assuming a single environment name.
+              shopt -s nullglob
+              values_files=("$CHART"/*_values.yaml)
+              if [ ${#values_files[@]} -eq 0 ]; then
+                echo "No *_values.yaml files found in $CHART - linting with the chart's own defaults only."
+                helm lint "$CHART" --set image.tag=$(imageTag)
+              else
+                for vf in "${values_files[@]}"; do
+                  echo "=== helm lint: $(basename "$vf") ==="
+                  helm lint "$CHART" --values "$vf" --set image.tag=$(imageTag)
+                done
+              fi
+
+              echo "✓ Chart is valid for every environment found"
+

@@ -1,0 +1,23 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    haproxy.router.openshift.io/timeout: 10m
+    haproxy.org/ssl-redirect: "false"
+  labels:
+    app: {{.Values.service.label}}
+  name: pdf-gen-route
+  namespace: {{.Values.deployment.namespace}}
+spec:
+  ingressClassName: haproxy
+  rules:
+    - host: {{.Values.route.host}}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: pdf-gen-service
+                port:
+                  number: {{.Values.service.portValue}}

@@ -1,0 +1,40 @@
+  jobs:
+  - job: RunMochaTests
+    pool:
+      name: ocp-billing-invserv1
+    workspace:
+      clean: all
+    steps:
+    - bash: |
+        echo "Node version"
+        node -v
+
+        echo "npm version"
+        npm -v
+
+        export http_proxy=$(GENERIC_ID_PROXY)
+
+        echo "Setting npm config"
+        npm config set proxy $(NPM_HTTP_PROXY)
+        npm config set https-proxy $(NPM_HTTPS_PROXY)
+        npm config set registry $(NPM_SPARK_REPOSITORY)
+        npm config set strict-ssl false
+
+        echo "Installing npm Modules"
+        npm install
+      displayName: "Install Dependencies"
+
+    - bash: |
+        echo "TypeScript Compile"
+        npm run build
+      displayName: Compile
+
+    - bash: |
+        echo "Run ESLINT"
+        npm run lint:ci
+      displayName: Lint
+    
+    - bash: |
+        echo "Running Mocha tests"
+        npm test
+      displayName: "Run Tests"

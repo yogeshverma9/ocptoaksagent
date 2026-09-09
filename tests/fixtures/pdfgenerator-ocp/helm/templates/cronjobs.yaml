@@ -1,0 +1,47 @@
+{{- range .Values.cronJobs }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:  
+  name: {{ .name }}
+  namespace: {{ .namespace }}
+spec: 
+  timeZone: "Pacific/Auckland"
+  schedule: "{{ .schedule }}"
+  concurrencyPolicy: "Replace"
+  suspend: false
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:   
+    spec:      
+      template:        
+        spec:          
+          containers:          
+          - name:  {{ .name }}        
+            image: "{{ $.Values.image.repository }}:{{ $.Values.image.tag }}"            
+            command: {{ .command }}
+            args: 
+            {{- range .arguments }}
+              - "{{ . }}"
+            {{- end }}
+            resources:
+              limits:
+                cpu: 450m
+                memory: 400M
+              requests:
+                cpu: 100m
+                memory: 200M
+            envFrom:
+            - secretRef:
+                name: mongodb-connection-string
+            env:
+            - name: RECEIVER_EMAIL
+              value: {{ $.Values.email.receiver }}
+            - name: SENDER_EMAIL
+              value: {{ $.Values.email.sender }}
+            - name: SMTP_SERVER
+              value: {{ $.Values.email.server }}
+            - name: SMTP_PORT
+              value: "{{ $.Values.email.port }}"
+          restartPolicy: OnFailure
+{{- end }}

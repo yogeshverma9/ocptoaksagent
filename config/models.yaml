@@ -1,0 +1,60 @@
+apiVersion: migration.spark.co.nz/v1
+kind: ModelConfig
+
+# LLM usage is mandatory: every run calls the model to actually generate/
+# refine migrated file content (not just narrative). Ollama is the default
+# because it runs locally - no cloud account, no API key, no per-call cost -
+# but it still needs the Ollama daemon installed and running with `model`
+# pulled (`ollama pull llama3.1:8b`). Swap `provider` to azure_openai/openai/
+# anthropic for a hosted model; only this file changes, never the engine.
+llm:
+  provider: ollama
+  model: llama3.1:8b
+  temperature: 0
+  seed: 0
+  max_tokens: 8000
+  endpoint: ${LLM_ENDPOINT}
+  api_key: ${LLM_API_KEY}
+  timeout_seconds: 600
+
+embeddings:
+  provider: "null"
+  model: none
+
+fallback: []
+
+routing:
+  classify: cheap
+  transform: primary
+  remediate: primary
+  judge: primary
+
+tiers:
+  cheap:
+    provider: ollama
+    model: qwen2.5:1.5b
+  primary:
+    provider: ollama
+    model: llama3.1:8b
+
+# Idempotency / freeze - see migration.env (FREEZE_OUTPUT, LLM_CACHE_DIR,
+# LLM_FORCE_REFRESH) for the day-to-day switch. These are the policy
+# defaults when no env var overrides them.
+freeze:
+  enabled: false
+  cacheDir: .llm_cache
+  forceRefresh: false
+
+guardrails:
+  maxLlmInvocationsPerRun: 25
+  llmOutputMustPassValidation: true
+  # The LLM is allowed to directly update rendered files (mandatory-LLM
+  # mode). The safety net moves to *after* generation: every LLM edit is
+  # still run through VALIDATE (helm lint/kubeconform/conftest/trivy); an
+  # edit that fails validation is reverted to the deterministic rule-engine
+  # output and recorded as a finding, never silently kept. A per-file call
+  # failure (timeout, unreachable endpoint) is handled the same way - it
+  # never aborts the whole run (rule L4).
+  forbidLlmDirectApply: false
+  revertOnValidationFailure: true
+  logAllPrompts: true

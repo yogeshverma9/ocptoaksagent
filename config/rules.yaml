@@ -1,0 +1,101 @@
+apiVersion: migration.spark.co.nz/v1
+kind: RuleSet
+
+transform:
+  - id: T1
+    name: route-to-ingress
+    description: OpenShift Route becomes networking.k8s.io/v1 Ingress
+    severity: BLOCK
+  - id: T2
+    name: helmdeploy-task-to-azcli
+    description: HelmDeploy@0 becomes AzureCLI@2 with az aks get-credentials + kubelogin
+    severity: BLOCK
+  - id: T3
+    name: hpa-v1-to-v2
+    description: autoscaling/v1 becomes autoscaling/v2 with metrics block
+    severity: HIGH
+  - id: T4
+    name: memory-units-binary
+    description: Decimal memory units (M, G) become binary (Mi, Gi)
+    severity: HIGH
+  - id: T5
+    name: agent-pool-remap
+    description: OCP agent pool becomes Azure DevOps hosted pool
+    severity: HIGH
+  - id: T6
+    name: dns-remap
+    description: '*.ocp.internal.spark.co.nz becomes *.aks.internal.spark.co.nz'
+    severity: BLOCK
+  - id: T7
+    name: env-matrix-expand
+    description: kubernetesServiceEndpoint becomes subscription/RG/cluster/namespace
+    severity: BLOCK
+  - id: T8
+    name: cd-orchestrator-param-sync
+    description: Stages calling template deploy.yaml get its new parameter contract
+      (endpoint becomes subscription/RG/cluster/namespace) plus a stage pool
+    severity: BLOCK
+
+remediate:
+  - id: M1
+    name: undefined-helm-value
+    description: Template references a .Values key no values file defines
+    severity: BLOCK
+  - id: M2
+    name: env-parity
+    description: Top-level values key present in some environments but not others
+    severity: BLOCK
+  - id: M3
+    name: secret-in-values
+    description: Literal credential committed to a values file
+    severity: BLOCK
+  - id: M4
+    name: mixed-memory-units
+    description: Decimal and binary memory units in the same container
+    severity: HIGH
+  - id: M5
+    name: burst-ratio
+    description: limit/request ratio exceeds standards.resources.maxBurstRatio
+    severity: HIGH
+  - id: M6
+    name: hpa-coverage
+    description: Deployment has no HorizontalPodAutoscaler
+    severity: MEDIUM
+  - id: M7
+    name: missing-probes
+    description: Container lacks liveness/readiness probes; --atomic depends on readiness
+    severity: HIGH
+  - id: M8
+    name: root-container
+    description: Dockerfile runs as root or performs world-writable chmod
+    severity: BLOCK
+  - id: M9
+    name: registry-and-pull-secret
+    description: On-prem registry reference and/or missing imagePullSecrets
+    severity: HIGH
+
+llm_refine:
+  - id: L1
+    name: llm-file-refinement
+    description: LLM reviewed and updated a rule-engine-transformed file
+    severity: INFO
+  - id: L2
+    name: llm-refinement-replayed
+    description: Frozen/cached LLM response replayed verbatim for idempotent output
+    severity: INFO
+  - id: L3
+    name: llm-refinement-reverted
+    description: LLM output failed post-generation validation; reverted to the
+      deterministic transform/remediate output
+    severity: MEDIUM
+  - id: L4
+    name: llm-call-failed
+    description: The model call itself failed (timeout, unreachable endpoint,
+      provider error); deterministic transform/remediate output was kept
+    severity: MEDIUM
+
+judge:
+  thresholds:
+    block: 1        # any BLOCK finding blocks
+    review: 1       # any HIGH/MEDIUM finding requires review
+  needsInputIsBlocking: false

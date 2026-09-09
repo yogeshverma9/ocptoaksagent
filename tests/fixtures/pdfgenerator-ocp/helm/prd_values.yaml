@@ -1,0 +1,103 @@
+# Default values for pdfgen.
+# Declare variables to be passed into your templates.
+
+deployment:
+  replicaCount: 1
+  name: pdfgen-deployment
+  app: pdf-gen
+  namespace: pdfgenerator
+
+callDetailsDeployment:
+  replicaCount: 1
+  name: pdfgen-call-details-deployment
+  app: pdf-gen
+  namespace: pdfgenerator
+
+customerSummaryDeployment:
+  replicaCount: 1
+  name: pdfgen-customer-summary-deployment
+  app: pdf-gen
+  namespace: pdfgenerator
+
+largeInvoicesDeployment:
+  replicaCount: 1
+  name: pdfgen-large-invoices-deployment
+  app: pdf-gen
+  namespace: pdfgenerator
+
+image:
+  repository: billing-container-registry.artifacts.internal.spark.co.nz/pdfgenerator
+  pullPolicy: Always
+
+cronJobs:
+  - name: pdfgen-reconciliation-report
+    namespace: pdfgenerator
+    schedule: "0 23,0,1,2,3,4 * * *"
+    command: ["node"]
+    arguments: ["./dist/src/cronScripts/reconciliation_report.js"]
+  - name: status-updater
+    namespace: pdfgenerator
+    schedule: "*/10 * * * *"
+    command: ["node"]
+    arguments: ["./dist/src/cronScripts/status_updater.js"]
+  - name: file-arrived-alerter
+    namespace: pdfgenerator
+    schedule: "0 21 * * * "
+    command: ["node"]
+    arguments: ["./dist/src/cronScripts/alerter.js", "fileHasArrived", "1"]
+  - name: rendering-started-alerter
+    namespace: pdfgenerator
+    schedule: "0 21 * * *"
+    command: ["node"]
+    arguments: ["./dist/src/cronScripts/alerter.js", "renderingStarted", "1"]
+  - name: rendering-completed-alerter
+    namespace: pdfgenerator
+    schedule: "59 23 * * *"
+    command: ["node"]
+    arguments: ["./dist/src/cronScripts/alerter.js", "renderingCompleted", "1"]
+  - name: all-delivered-alerter
+    namespace: pdfgenerator
+    schedule: "0 8 * * *"
+    command: ["node"]
+    arguments: ["./dist/src/cronScripts/alerter.js", "allDelivered"]
+  - name: customer-invoice-report-alerter
+    namespace: pdfgenerator
+    schedule: "30 2 * * *"
+    command: ["node"]
+    arguments: ["./dist/src/cronScripts/alerter.js", "customerInvoiceReport"]
+  - name: print-delivered-alerter
+    namespace: pdfgenerator
+    schedule: "55 22 * * *"
+    command: ["node"]
+    arguments: ["./dist/src/cronScripts/alerter.js", "printDelivered"]
+
+email:
+  receiver : "ARMigrationSquad@SparkNZ.onmicrosoft.com"
+  sender : "ARMigrationSquad@SparkNZ.onmicrosoft.com"
+  server : "caplovh05.telecom.tcnz.net"
+  port : 25
+
+service:
+  label: pdf-gen
+  portName: 8081
+  portValue: 8081
+  portTarget: 8081
+  portProtocol: TCP
+
+hpa:
+  minReplicas: 1
+  maxReplicas: 8
+  targetCPUUtilizationPercentage: 75
+
+route:
+  host: billing-pdfgenerator.apps.prod05.ocp.internal.spark.co.nz
+
+envVars:
+  - name: PEPPOL_CONVERTER_API_URL
+    value: 'http://billing-peppolconverter.apps.prod05.ocp.internal.spark.co.nz/v1/peppolConversionTrigger'
+  - name: API_CONNECT_URL
+    value: 'https://apigw.spark.co.nz/spark/bill/image/<uuid>?client_id=<clientId>'
+  - name: API_CONNECT_CLIENT_ID
+    value: 94f2d7cbcf33255df8e06eacb40d4292
+  - name: INVOICE_METADATA_ENABLED
+    value: 'false'

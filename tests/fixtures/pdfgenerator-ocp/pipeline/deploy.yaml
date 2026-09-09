@@ -1,0 +1,79 @@
+jobs:
+
+- deployment: Deploy
+  displayName: ${{ parameters.environment }}
+  pool:
+    name: ocp-billing-invserv1
+  timeoutInMinutes: 0
+  cancelTimeoutInMinutes: 0
+  environment: ${{ parameters.environment }} 
+  strategy:
+    runOnce:
+      deploy:
+        steps: 
+          - checkout: self 
+            clean: true
+          
+          - script: |
+              az extension add --name azure-devops
+              if [ ${{ parameters.buildNumber }} == "latest" ]; then
+                tag=$(az pipelines runs list --pipeline-ids "3744" --project Spark --organization "https://dev.azure.com/sparknz" --output json --result succeeded --tags Built --branch ${{ replace(variables['Build.SourceBranch'], 'refs/heads/', '') }} --query-order FinishTimeDesc --top 1 |
+                  jq '.[0].buildNumber')
+                if [ "$tag" == null ]; then
+                  tag=$(az pipelines runs list --pipeline-ids "3744" --project Spark --organization "https://dev.azure.com/sparknz" --output json --result succeeded --tags Built --branch master --query-order FinishTimeDesc --top 1 |
+                    jq '.[0].buildNumber')
+                fi 
+              else
+                tag=$"${{ parameters.buildNumber }}"
+              fi
+              echo "Run id"
+              echo $tag
+              echo "##vso[task.setVariable variable=tag;isOutput=true]$tag"
+              if [ "$tag" == null ] || [ -z "$tag" ]; then
+                echo 'Build tag could not be found'
+                exit 1;
+              fi
+            displayName: 'Determine Tag of build' 
+            name: 'SetTagId'
+            env:
+              AZURE_DEVOPS_EXT_PAT: $(System.AccessToken)
+
+
+          - script: |
+              echo "Deployment of Service : PDF Generator"
+              echo;
+              echo #
+              echo "Environment variables"
+              echo #
+              echo;
+              printenv
+              echo;
+              echo;
+            displayName: 'Initialize Environment Variables'
+
+
+          - task: HelmDeploy@0
+            displayName: Helm Dry Run
+            inputs: 
+              arguments: --set image.tag=$(SetTagId.tag) --debug --dry-run
+              kubernetesServiceEndpoint: ${{ parameters.endpoint }}
+              command: upgrade
+              chartType: FilePath
+              chartPath: $(Build.SourcesDirectory)/helm/
+              releaseName: pdfgenerator-release
+              valueFile: $(Build.SourcesDirectory)/helm/${{ parameters.values }}
+              install: true
+              waitForExecution: true
+
+          - task: HelmDeploy@0
+            displayName: Helm upgrade
+            inputs: 
+              arguments: --set image.tag=$(SetTagId.tag) --atomic --timeout 15m0s --history-max 3
+              kubernetesServiceEndpoint: ${{ parameters.endpoint }}
+              command: upgrade
+              chartType: FilePath
+              chartPath: $(Build.SourcesDirectory)/helm/
+              releaseName: pdfgenerator-release
+              valueFile: $(Build.SourcesDirectory)/helm/${{ parameters.values }}
+              install: true
+              waitForExecution: true

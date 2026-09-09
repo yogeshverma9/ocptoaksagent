@@ -1,0 +1,53 @@
+apiVersion: migration.spark.co.nz/v1
+kind: ServiceMappings
+
+# Used by `aksmig workbook` to translate what a user writes in a plain-text
+# intake file (see migration-intake.example.txt) into an Azure/AKS equivalent.
+# `match` values are lower-cased substrings checked against the user-supplied
+# text, so "RWX", "ReadWriteMany" and "read-write-many, 200Gi" all resolve.
+
+storage:
+  - requirement: RWO
+    match: ["rwo", "readwriteonce", "read-write-once", "read write once"]
+    azureService: Azure Disk
+    storageClass: managed-csi
+    notes: Single-node attach only; cannot be shared across pods on different nodes.
+
+  - requirement: RWX
+    match: ["rwx", "readwritemany", "read-write-many", "read write many"]
+    azureService: Azure Files
+    storageClass: azurefile-csi
+    notes: Shared across pods/nodes; lower IOPS ceiling than Azure Disk.
+
+  - requirement: Large shared storage
+    match: ["large shared", "large-shared", "anf", "netapp", "high-throughput shared", "high throughput shared"]
+    azureService: Azure NetApp Files
+    storageClass: n/a - provisioned via the ANF CSI driver or Astra Trident
+    notes: For high-throughput / large-capacity shared workloads beyond Azure Files limits.
+
+  - requirement: Object storage
+    match: ["object", "blob", "s3", "object storage"]
+    azureService: Azure Blob Storage
+    storageClass: n/a - accessed via SDK/API, not a PVC (unless using blobfuse CSI)
+    notes: Prefer SDK/API access; use the Blob CSI driver only if a POSIX-like mount is required.
+
+network:
+  - requirement: Route
+    match: ["route", "route.openshift.io"]
+    azureService: Ingress
+    notes: networking.k8s.io/v1 Ingress using the org ingress class (see config/standards.yaml).
+
+  - requirement: Egress Policies
+    match: ["egress", "egress policy", "egress policies"]
+    azureService: Network Policies
+    notes: Calico/Azure NPM NetworkPolicy resources; OCP egress firewall rules do not carry over automatically.
+
+  - requirement: Internal Services
+    match: ["internal service", "internal services", "clusterip", "cluster-ip", "internal"]
+    azureService: ClusterIP
+    notes: Default Service type for in-cluster-only traffic.
+
+  - requirement: External Services
+    match: ["external service", "external services", "loadbalancer", "load balancer", "external"]
+    azureService: LoadBalancer
+    notes: Provisions an Azure Load Balancer / public IP; confirm NSG and firewall rules.

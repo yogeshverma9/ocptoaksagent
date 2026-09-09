@@ -1,0 +1,45 @@
+# Migration intake - fill in what you know, leave the rest blank.
+#
+# One block per Namespace/Deployment, separated by a BLANK LINE.
+# Lines are "Key: Value". Keys are case-insensitive and a little fuzzy
+# (e.g. "App", "Service" and "Workload" all mean Deployment).
+# Lines starting with "#" are comments and are ignored.
+#
+# Run it with:
+#   ./run.sh workbook migration-intake.txt
+# or, without Docker:
+#   python -m aksmig workbook --intake migration-intake.txt --out aks --config-dir config
+#
+# This produces aks/migration_workbook.md and aks/migration_workbook.csv.
+# Any field you don't recognise below is still kept (just not mapped to a
+# column) - nothing you type is silently dropped.
+
+Namespace: billing-prod
+Deployment: pdfgenerator
+Route: pdfgenerator.apps.prod05.ocp.internal.spark.co.nz
+Service Type: External
+PVC: pdfgen-data-pvc
+Storage Type: RWX
+Database: postgres-prod (external, not migrating)
+Secrets: API_CONNECT_CLIENT_ID, DB_PASSWORD
+Owner: Billing Platform Team
+Dependencies: reporting-service
+Risks: Shared PVC across 3 replicas; confirm Azure Files performance tier
+
+Namespace: billing-int
+Deployment: pdfgenerator
+Route: pdfgenerator-int.apps.npe04.ocp.internal.spark.co.nz
+Service Type: Internal
+PVC:
+Storage Type: RWO
+Database:
+Owner: Billing Platform Team
+
+Namespace: billing-reporting
+Deployment: reporting-service
+Route:
+PVC: reporting-cache
+Storage Type: large shared, ~2Ti, high-throughput shared
+Database: reporting-db (Azure SQL target)
+Owner: Reporting Team
+Dependencies: pdfgenerator

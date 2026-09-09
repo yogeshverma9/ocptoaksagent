@@ -1,0 +1,286 @@
+parameters:
+  - name: buildNumber
+    type: string
+    default: latest
+
+stages:
+  - stage: DEV
+    pool:
+      name: az-dot-ci-nzn-npe
+    dependsOn: []
+    displayName: Deploy to Development
+    variables:
+      - name: ENVIRONMENT
+        value: BILLING_DEVOPS_PDFGEN_DEV01
+      - name: aksTargetClusterName
+        value: aks-bil-app-dev-nzn-002
+      - name: azureResourceGroup
+        value: rg-bill-app-dev-nzn-001
+      - name: kubernetesNamespace
+        value: pdfgenerator
+      - group: BILLING_DEVOPS_PDF_GENERATOR
+    jobs:
+      - deployment: DeployToDevelopment
+        displayName: Deploy to Development
+        environment: DEV
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: AzureCLI@2
+                  displayName: "Login + Get AKS Credentials"
+                  inputs:
+                    azureSubscription: tf-azurerm-spark-bill-dev-app-pdfgen-Spark
+                    scriptType: bash
+                    scriptLocation: inlineScript
+                    inlineScript: |
+                      az account show --query user
+
+                      az aks get-credentials \
+                        --resource-group $(azureResourceGroup) \
+                        --name $(aksTargetClusterName) \
+                        --overwrite-existing
+
+                      kubelogin convert-kubeconfig -l azurecli
+
+                      kubectl get pods --namespace $(kubernetesNamespace) --request-timeout=30s
+                - task: AzureCLI@2
+                  displayName: "Validate All Kubernetes Manifests"
+                  inputs:
+                    azureSubscription: tf-azurerm-spark-bill-dev-app-pdfgen-Spark
+                    scriptType: bash
+                    scriptLocation: inlineScript
+                    inlineScript: |
+                      printenv
+                      echo -e "\n=== Testing RBAC Permissions ==="
+
+                      kubectl auth can-i create pods --namespace $(kubernetesNamespace) --request-timeout=30s \
+                        && echo "✓ Can create pods directly" \
+                        || { echo "✗ Cannot create pods - insufficient permissions"; exit 1; }
+
+                      echo "✓ RBAC validation passed"
+
+  - stage: INT
+    pool:
+      name: az-dot-ci-nzn-npe
+    dependsOn: [DEV]
+    displayName: Deploy to Integration
+    variables:
+      - name: ENVIRONMENT
+        value: BILLING_DEVOPS_PDFGEN_INT
+      - name: aksTargetClusterName
+        value: aks-bil-app-npe-nzn-002
+      - name: azureResourceGroup
+        value: rg-bill-app-npe-nzn-001
+      - name: kubernetesNamespace
+        value: pdfgenerator-int
+      - group: BILLING_DEVOPS_PDF_GENERATOR
+    jobs:
+      - deployment: DeployToIntegration
+        displayName: Deploy to Integration
+        environment: INT
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: AzureCLI@2
+                  displayName: "Login + Get AKS Credentials"
+                  inputs:
+                    azureSubscription: tf-azurerm-spark-bill-npe-app-pdfgen-Spark
+                    scriptType: bash
+                    scriptLocation: inlineScript
+                    inlineScript: |
+                      az account show --query user
+
+                      az aks get-credentials \
+                        --resource-group $(azureResourceGroup) \
+                        --name $(aksTargetClusterName) \
+                        --overwrite-existing
+
+                      kubelogin convert-kubeconfig -l azurecli
+
+                      kubectl get pods --namespace $(kubernetesNamespace) --request-timeout=30s
+                - task: AzureCLI@2
+                  displayName: "Validate All Kubernetes Manifests"
+                  inputs:
+                    azureSubscription: tf-azurerm-spark-bill-npe-app-pdfgen-Spark
+                    scriptType: bash
+                    scriptLocation: inlineScript
+                    inlineScript: |
+                      printenv
+                      echo -e "\n=== Testing RBAC Permissions ==="
+
+                      kubectl auth can-i create pods --namespace $(kubernetesNamespace) --request-timeout=30s \
+                        && echo "✓ Can create pods directly" \
+                        || { echo "✗ Cannot create pods - insufficient permissions"; exit 1; }
+
+                      echo "✓ RBAC validation passed"
+
+  - stage: NFT
+    pool:
+      name: az-dot-ci-nzn-npe
+    dependsOn: [DEV]
+    displayName: Deploy to NFT
+    variables:
+      - name: ENVIRONMENT
+        value: BILLING_DEVOPS_PDFGEN_NFT
+      - name: aksTargetClusterName
+        value: aks-bil-app-npe-nzn-002
+      - name: azureResourceGroup
+        value: rg-bill-app-npe-nzn-001
+      - name: kubernetesNamespace
+        value: pdfgenerator-nft
+      - group: BILLING_DEVOPS_PDF_GENERATOR
+    jobs:
+      - deployment: DeployToNFT
+        displayName: Deploy to NFT
+        environment: NFT
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: AzureCLI@2
+                  displayName: "Login + Get AKS Credentials"
+                  inputs:
+                    azureSubscription: tf-azurerm-spark-bill-npe-app-pdfgen-Spark
+                    scriptType: bash
+                    scriptLocation: inlineScript
+                    inlineScript: |
+                      az account show --query user
+
+                      az aks get-credentials \
+                        --resource-group $(azureResourceGroup) \
+                        --name $(aksTargetClusterName) \
+                        --overwrite-existing
+
+                      kubelogin convert-kubeconfig -l azurecli
+
+                      kubectl get pods --namespace $(kubernetesNamespace) --request-timeout=30s
+                - task: AzureCLI@2
+                  displayName: "Validate All Kubernetes Manifests"
+                  inputs:
+                    azureSubscription: tf-azurerm-spark-bill-npe-app-pdfgen-Spark
+                    scriptType: bash
+                    scriptLocation: inlineScript
+                    inlineScript: |
+                      printenv
+                      echo -e "\n=== Testing RBAC Permissions ==="
+
+                      kubectl auth can-i create pods --namespace $(kubernetesNamespace) --request-timeout=30s \
+                        && echo "✓ Can create pods directly" \
+                        || { echo "✗ Cannot create pods - insufficient permissions"; exit 1; }
+
+                      echo "✓ RBAC validation passed"
+
+  - stage: STG
+    pool:
+      name: az-dot-ci-nzn-npe
+    dependsOn: [INT, NFT]
+    displayName: Deploy to Staging
+    variables:
+      - name: ENVIRONMENT
+        value: BILLING_DEVOPS_PDFGEN_STG
+      - name: aksTargetClusterName
+        value: aks-bil-app-npe-nzn-002
+      - name: azureResourceGroup
+        value: rg-bill-app-npe-nzn-001
+      - name: kubernetesNamespace
+        value: pdfgenerator
+      - group: BILLING_DEVOPS_PDF_GENERATOR
+    jobs:
+      - deployment: DeployToStaging
+        displayName: Deploy to Staging
+        environment: STG
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: AzureCLI@2
+                  displayName: "Login + Get AKS Credentials"
+                  inputs:
+                    azureSubscription: tf-azurerm-spark-bill-npe-app-pdfgen-Spark
+                    scriptType: bash
+                    scriptLocation: inlineScript
+                    inlineScript: |
+                      az account show --query user
+
+                      az aks get-credentials \
+                        --resource-group $(azureResourceGroup) \
+                        --name $(aksTargetClusterName) \
+                        --overwrite-existing
+
+                      kubelogin convert-kubeconfig -l azurecli
+
+                      kubectl get pods --namespace $(kubernetesNamespace) --request-timeout=30s
+                - task: AzureCLI@2
+                  displayName: "Validate All Kubernetes Manifests"
+                  inputs:
+                    azureSubscription: tf-azurerm-spark-bill-npe-app-pdfgen-Spark
+                    scriptType: bash
+                    scriptLocation: inlineScript
+                    inlineScript: |
+                      printenv
+                      echo -e "\n=== Testing RBAC Permissions ==="
+
+                      kubectl auth can-i create pods --namespace $(kubernetesNamespace) --request-timeout=30s \
+                        && echo "✓ Can create pods directly" \
+                        || { echo "✗ Cannot create pods - insufficient permissions"; exit 1; }
+
+                      echo "✓ RBAC validation passed"
+
+  - stage: PRD
+    pool:
+      name: az-dot-ci-nzn-prd
+    dependsOn: [STG]
+    displayName: Deploy to Production
+    condition: and(succeeded(), startsWith(variables['Build.SourceBranch'], 'refs/heads/master'))
+    variables:
+      - name: ENVIRONMENT
+        value: BILLING_DEVOPS_PDFGEN_PROD
+      - name: aksTargetClusterName
+        value: aks-bil-app-prd-nzn-002
+      - name: azureResourceGroup
+        value: rg-bill-app-prd-nzn-001
+      - name: kubernetesNamespace
+        value: pdfgenerator
+      - group: BILLING_DEVOPS_PDF_GENERATOR
+    jobs:
+      - deployment: DeployToProduction
+        displayName: Deploy to Production
+        environment: PRD
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: AzureCLI@2
+                  displayName: "Login + Get AKS Credentials"
+                  inputs:
+                    azureSubscription: tf-azurerm-spark-bill-prd-app-pdfgen-Spark
+                    scriptType: bash
+                    scriptLocation: inlineScript
+                    inlineScript: |
+                      az account show --query user
+
+                      az aks get-credentials \
+                        --resource-group $(azureResourceGroup) \
+                        --name $(aksTargetClusterName) \
+                        --overwrite-existing
+
+                      kubelogin convert-kubeconfig -l azurecli
+
+                      kubectl get pods --namespace $(kubernetesNamespace) --request-timeout=30s
+                - task: AzureCLI@2
+                  displayName: "Validate All Kubernetes Manifests"
+                  inputs:
+                    azureSubscription: tf-azurerm-spark-bill-prd-app-pdfgen-Spark
+                    scriptType: bash
+                    scriptLocation: inlineScript
+                    inlineScript: |
+                      printenv
+                      echo -e "\n=== Testing RBAC Permissions ==="
+
+                      kubectl auth can-i create pods --namespace $(kubernetesNamespace) --request-timeout=30s \
+                        && echo "✓ Can create pods directly" \
+                        || { echo "✗ Cannot create pods - insufficient permissions"; exit 1; }
+
+                      echo "✓ RBAC validation passed"

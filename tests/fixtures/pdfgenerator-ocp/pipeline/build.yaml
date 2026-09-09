@@ -1,0 +1,42 @@
+jobs:
+- job: Build
+  pool:
+    name: ocp-billing-invserv1
+
+  steps:
+
+  - bash:  |
+        echo "Build number: $(Build.BuildNumber)"
+        echo "Build ID: $(Build.BuildID)" 
+    displayName: "Build Variables"
+
+  - task: Docker@2.240.2
+    displayName: Login to docker Repository
+    inputs:
+      command: login
+      containerRegistry: billing-container-registry-user
+
+  - task: Docker@2.240.2
+    displayName: Build PDF Generator Image
+    inputs:
+      command: build
+      Dockerfile: Dockerfile
+      containerRegistry: billing-container-registry-user
+      repository: pdfgenerator
+      tags: $(Build.BuildNumber)
+      arguments: --build-arg http_proxy=$(GENERIC_ID_PROXY) --build-arg https_proxy=$(GENERIC_ID_PROXY)
+      
+  - task: Docker@2.240.2
+    displayName: Push PDF Generator Image
+    inputs:
+      command: push
+      containerRegistry: billing-container-registry-user
+      repository: pdfgenerator
+      tags: $(Build.BuildNumber)
+
+  - bash:  |
+      az extension add --name azure-devops
+      az pipelines runs tag add --run-id $(Build.BuildId) --tags Built,$(Build.BuildNumber) --org https://dev.azure.com/sparknz --project Spark  
+    displayName: 'Tag Pipeline run for build' 
+    env:
+      AZURE_DEVOPS_EXT_PAT: $(System.AccessToken)

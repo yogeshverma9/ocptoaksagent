@@ -1,0 +1,61 @@
+# Default values for pdfgen.
+# Declare variables to be passed into your templates.
+
+deployment:
+  replicaCount: 1
+  name: pdfgen-deployment
+  app: pdf-gen
+  namespace: pdfgenerator
+
+callDetailsDeployment:
+  replicaCount: 1
+  name: pdfgen-call-details-deployment
+  app: pdf-gen
+  namespace: pdfgenerator
+
+customerSummaryDeployment:
+  replicaCount: 1
+  name: pdfgen-customer-summary-deployment
+  app: pdf-gen
+  namespace: pdfgenerator
+
+largeInvoicesDeployment:
+  replicaCount: 1
+  name: pdfgen-large-invoices-deployment
+  app: pdf-gen
+  namespace: pdfgenerator
+
+image:
+  repository: billing-container-registry.artifacts.internal.spark.co.nz/pdfgenerator
+  pullPolicy: Always
+
+service:
+  label: pdf-gen
+  portName: 8081
+  portValue: 8081
+  portTarget: 8081
+  portProtocol: TCP
+
+email:
+  receiver: "ARMigrationSquad@SparkNZ.onmicrosoft.com"
+  sender: "ARMigrationSquad@SparkNZ.onmicrosoft.com"
+  server: "caplovh05.telecom.tcnz.net"
+  port: 25
+
+hpa:
+  minReplicas: 1
+  maxReplicas: 8
+  targetCPUUtilizationPercentage: 75
+
+route:
+  host: billing-pdfgenerator.apps.bil.dev.aks.internal.spark.co.nz
+
+envVars:
+  - name: PEPPOL_CONVERTER_API_URL
+    value: "http://billing-peppolconverter.apps.dev01.ocp.internal.spark.co.nz/v1/p\
+      eppolConversionTrigger"
+  - name: API_CONNECT_URL
+    value: "https://apigw-test.spark.co.nz/spark/bill/image/<uuid>?client_id=<clien\
+      tId>"
+  - name: API_CONNECT_CLIENT_ID
+    value: "placeholder"
