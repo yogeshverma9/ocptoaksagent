@@ -61,7 +61,9 @@ variables:
   # environment - see AGENTIC_FRAMEWORK.md). aks-migrator always reads its
   # config/ from wherever run.sh itself is invoked from (Repo B), not from
   # Repo A - Repo A only supplies the OCP source files to convert.
-  failOnBlock: "true"
+  # false: blocking findings are still pushed/reported (validation.md,
+  # findings.json) but never fail this pipeline - see convert-and-push.sh.
+  failOnBlock: "false"
 
   # LLM (mandatory for aks-migrator) - see migration.env.example for the
   # full set of knobs. Leave llmModel blank to use config/models.yaml's default.

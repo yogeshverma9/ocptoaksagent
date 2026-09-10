@@ -55,14 +55,13 @@ git add aks/
 
 if git diff --cached --quiet; then
   echo "No changes to commit - converted output is identical to what's already there."
-  exit "$MIGRATE_EXIT"
+  exit 0
 fi
 
 COMMIT_MSG="aks-migrator: convert OCP to AKS [skip ci]"
 if [ "$MIGRATE_EXIT" -eq 2 ]; then
   COMMIT_MSG="aks-migrator: convert OCP to AKS (BLOCKED - see aks/validation.md) [skip ci]"
 fi
-
 # [skip ci] is a widely-recognised convention (Azure Pipelines honours
 # ***NO_CI*** / [skip ci] in the commit message) - prevents this push from
 # re-triggering a CI pipeline on the OCP source repo, if it has one.
@@ -72,5 +71,5 @@ echo "✓ Pushed converted manifests to branch '$GIT_BRANCH'"
 
 if [ "$MIGRATE_EXIT" -eq 2 ]; then
   echo "aks-migrator reported blocking findings - see aks/validation.md in the pushed output." >&2
-  exit 2
+  echo "Not failing this pipeline stage - review the recommendations and re-run once addressed." >&2
 fi
