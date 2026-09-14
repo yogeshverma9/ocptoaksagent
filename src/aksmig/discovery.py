@@ -93,6 +93,16 @@ def discover(root: Path, *, exclude: list[Path] | None = None) -> Inventory:
     # up their own output and end up nesting it (aks/aks/aks/...).
     exclude_abs = [p.resolve() for p in (exclude or []) if p.exists()]
 
+    # Also skip any subtree that is itself a previous aks-migrator output -
+    # identified by a `verdict.json` sibling of the chart. This catches the
+    # container case where OUT_DIR is bind-mounted separately but still shows
+    # up under the workspace mount (see run.sh migrate), which the explicit
+    # `exclude` above cannot match by path alone.
+    prev_output_roots: list[Path] = []
+    for verdict in root.rglob("verdict.json"):
+        if verdict.is_file():
+            prev_output_roots.append(verdict.parent.resolve())
+
     for path in sorted(root.rglob("*")):
         if not path.is_file():
             continue
@@ -103,6 +113,11 @@ def discover(root: Path, *, exclude: list[Path] | None = None) -> Inventory:
         if any(
             resolved == ex or ex in resolved.parents
             for ex in exclude_abs
+        ):
+            continue
+        if any(
+            prev == resolved.parent or prev in resolved.parents
+            for prev in prev_output_roots
         ):
             continue
         rel = path.relative_to(root).as_posix()
