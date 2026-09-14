@@ -186,6 +186,37 @@ class TransformResult:
         self.findings: list[Finding] = []
 
 
+def _convert_deployment_config(doc: str) -> tuple[str, list[str]]:
+    """Rewrite a single `DeploymentConfig` YAML document into an `apps/v1
+    Deployment`. Returns (new_doc, notes) describing what changed."""
+    notes: list[str] = []
+    new = doc.replace("apiVersion: apps.openshift.io/v1", "apiVersion: apps/v1")
+    new = re.sub(r"^(\s*)kind:\s*DeploymentConfig\s*$", r"\1kind: Deployment", new, count=1, flags=re.M)
+
+    # spec.selector: DeploymentConfig allows a flat label map; Deployment requires matchLabels.
+    sel_m = re.search(r"^(?P<indent>\s*)selector:\s*\n(?P<body>(?:(?P=indent)[ \t]+\S.*\n?)+)", new, re.M)
+    if sel_m and "matchLabels" not in sel_m.group(0):
+        indent = sel_m.group("indent")
+        labels = "".join(f"{indent}    {line.strip()}\n" for line in sel_m.group("body").splitlines())
+        new = new[:sel_m.start()] + f"{indent}selector:\n{indent}  matchLabels:\n{labels}" + new[sel_m.end():]
+        notes.append("spec.selector wrapped in matchLabels (required by Deployment)")
+
+    # spec.strategy: Rolling/rollingParams -> RollingUpdate/rollingUpdate (Recreate is unchanged).
+    if re.search(r"^\s*type:\s*Rolling\s*$", new, re.M):
+        new = re.sub(r"^(\s*)type:\s*Rolling\s*$", r"\1type: RollingUpdate", new, count=1, flags=re.M)
+        new = re.sub(r"^(\s*)rollingParams:\s*$", r"\1rollingUpdate:", new, count=1, flags=re.M)
+        notes.append("strategy.type Rolling -> RollingUpdate (rollingParams -> rollingUpdate)")
+
+    # spec.triggers has no Deployment equivalent - image/config rollout automation
+    # has to come from the CD pipeline instead (see the T2 deploy.yaml rewrite).
+    trig_m = re.search(r"^(?P<indent>\s*)triggers:\s*\n(?:(?P=indent)[ \t]+\S.*\n?)+", new, re.M)
+    if trig_m:
+        new = new[:trig_m.start()] + new[trig_m.end():]
+        notes.append("triggers block removed (no Deployment equivalent)")
+
+    return new, notes
+
+
 def _memory_units(text: str) -> tuple[str, int]:
     pattern = re.compile(r'(memory:\s*"?)(\d+)([MG])("?)(?!i)')
     count = 0
@@ -330,6 +361,100 @@ def transform(inv: Inventory, cfg, env: dict[str, Any]) -> TransformResult:
                         f"template (standards.yaml dns.targetTemplate) for tier {file_tier!r}, "
                         f"e.g. {example_target}",
                         auto_fixed=True))
+
+    # ---- T9 DeploymentConfig -> Deployment, T10 ImageStream removed, T11 BuildConfig removed
+    # None of these OpenShift-only kinds exist on vanilla Kubernetes/AKS (see
+    # config/standards.yaml forbiddenApiVersions). DeploymentConfig has a direct
+    # Deployment equivalent, so it's rewritten in place; ImageStream/BuildConfig
+    # don't, so they're removed here and surfaced as findings instead of silently
+    # passing through to the emitted chart, where V7 would otherwise BLOCK on them
+    # with no explanation of what to do instead.
+    for rel, text in list(res.files.items()):
+        if not any(m in text for m in
+                   ("apps.openshift.io/v1", "image.openshift.io/v1", "build.openshift.io/v1")):
+            continue
+        docs = re.split(r"(?m)^---[ \t]*\n", text)
+        kept_docs: list[str] = []
+        changed = False
+        for doc in docs:
+            kind_m = re.search(r"^kind:\s*(\w+)", doc, re.M)
+            kind = kind_m.group(1) if kind_m else None
+            name_m = re.search(r"^\s*name:\s*([\w.-]+)", doc, re.M)
+            name = name_m.group(1) if name_m else "(unnamed)"
+
+            if kind == "DeploymentConfig":
+                new_doc, notes = _convert_deployment_config(doc)
+                kept_docs.append(new_doc)
+                changed = True
+                res.findings.append(
+                    Finding("T9", f"DeploymentConfig {name!r} converted to Deployment",
+                            Severity.INFO, rel, "; ".join(notes) or "apiVersion/kind rewritten",
+                            auto_fixed=True))
+                if any("triggers" in note for note in notes):
+                    res.findings.append(
+                        Finding("T9", f"DeploymentConfig {name!r}: verify image rollout strategy",
+                                Severity.NEEDS_INPUT, rel,
+                                "The removed ImageChange/ConfigChange triggers drove automatic "
+                                "rollouts on this DeploymentConfig; Deployment has no equivalent.",
+                                remediation="Confirm the CD pipeline's image-tag update (see the T2 "
+                                            "deploy.yaml rewrite, which sets --set image.tag=<resolved "
+                                            "tag> on every helm upgrade) replaces what the trigger did."))
+                continue
+
+            if kind == "ImageStream":
+                changed = True
+                res.findings.append(
+                    Finding("T10", f"ImageStream {name!r} removed (no AKS equivalent)",
+                            Severity.INFO, rel,
+                            "AKS containers reference images directly rather than through an "
+                            "ImageStream indirection.", auto_fixed=True))
+                from_m = re.search(r"kind:\s*DockerImage\s*\n\s*name:\s*(\S+)", doc)
+                remediation = (
+                    f"Mirror {from_m.group(1)} into the target ACR ({std['registry']['target']}) "
+                    "(e.g. 'az acr import') and reference it directly in the container image field."
+                    if from_m else
+                    f"Push the image built by the corresponding BuildConfig straight to the target "
+                    f"ACR ({std['registry']['target']}) from the CI pipeline, and reference it "
+                    "directly in the container image field."
+                )
+                res.findings.append(
+                    Finding("T10", f"ImageStream {name!r}: confirm image source on AKS",
+                            Severity.NEEDS_INPUT, rel,
+                            f"Source: {from_m.group(1) if from_m else 'built in-cluster (see BuildConfig)'}.",
+                            remediation=remediation))
+                continue
+
+            if kind == "BuildConfig":
+                changed = True
+                git_m = re.search(r"uri:\s*(\S+)", doc)
+                ref_m = re.search(r"ref:\s*(\S+)", doc)
+                out_m = re.search(r"output:\s*\n\s*to:\s*\n\s*kind:\s*\w+\s*\n\s*name:\s*(\S+)", doc)
+                res.findings.append(
+                    Finding("T11", f"BuildConfig {name!r} removed (no AKS equivalent)",
+                            Severity.INFO, rel,
+                            "In-cluster source-to-image builds aren't supported outside OpenShift.",
+                            auto_fixed=True))
+                res.findings.append(
+                    Finding("T11", f"BuildConfig {name!r}: move build into the CI pipeline",
+                            Severity.NEEDS_INPUT, rel,
+                            f"Source: {git_m.group(1) if git_m else '?'} "
+                            f"(ref {ref_m.group(1) if ref_m else '?'}), "
+                            f"output image: {out_m.group(1) if out_m else '?'}.",
+                            remediation="Add a docker build+push step for this image to the target "
+                                        "ACR in the CI pipeline (see pipeline/build.yaml for the "
+                                        "pattern this repo already uses for containerised builds)."))
+                continue
+
+            kept_docs.append(doc)
+
+        if not changed:
+            continue
+        remaining = [d for d in kept_docs if d.strip()]
+        if not remaining:
+            res.deleted.append(rel)
+            del res.files[rel]
+        else:
+            res.files[rel] = "---\n".join(remaining)
 
     # ---- T2 + T5 + T7 pipeline rewrite
     for rel, text in list(res.files.items()):

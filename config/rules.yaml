@@ -35,6 +35,21 @@ transform:
     description: Stages calling template deploy.yaml get its new parameter contract
       (endpoint becomes subscription/RG/cluster/namespace) plus a stage pool
     severity: BLOCK
+  - id: T9
+    name: deploymentconfig-to-deployment
+    description: OpenShift DeploymentConfig becomes apps/v1 Deployment (selector
+      wrapped in matchLabels, Rolling strategy renamed, triggers removed)
+    severity: BLOCK
+  - id: T10
+    name: imagestream-removed
+    description: OpenShift ImageStream removed - AKS containers reference images
+      directly (e.g. from ACR) instead of through an ImageStream indirection
+    severity: BLOCK
+  - id: T11
+    name: buildconfig-removed
+    description: OpenShift BuildConfig removed - in-cluster source-to-image builds
+      have no AKS equivalent and must move into the CI pipeline
+    severity: BLOCK
 
 remediate:
   - id: M1

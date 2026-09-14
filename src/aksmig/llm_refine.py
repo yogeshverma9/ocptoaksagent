@@ -25,6 +25,15 @@ Rules:
 - Only add livenessProbe/readinessProbe to a Deployment's container spec.
   Never add, mention, or explain probes for any other kind (HPA, Service,
   Ingress, PVC, etc.) or file.
+- If the file still contains any OpenShift-only apiVersion (route.openshift.io,
+  apps.openshift.io, image.openshift.io, build.openshift.io,
+  security.openshift.io) or kind (Route, DeploymentConfig, ImageStream,
+  BuildConfig, SecurityContextConstraints), convert it to the closest vanilla
+  Kubernetes / AKS equivalent - or, if there is no direct equivalent (e.g.
+  ImageStream, BuildConfig), remove that document and add a single YAML
+  comment at the top of the file explaining what was removed and where the
+  responsibility now lives (CI pipeline, ACR, etc.). Never leave an OCP-only
+  apiVersion in the output.
 - If nothing needs to change, return the AFTER content unchanged.
 - Return ONLY the final file content. No explanation, no markdown code
   fences, no commentary before or after.
@@ -154,7 +163,11 @@ def refine_files(
     (`L3`/`L4`) records what happened, and the loop moves on to the next file.
     """
     findings: list[Finding] = []
-    all_findings = res.findings + extra_findings
+    # inv.findings carries discovery's D0 markers for every OCP-coupled file -
+    # including them here means the LLM gets a shot at converting OCP kinds
+    # that no deterministic T-rule matched (e.g. a novel OpenShift-only kind),
+    # instead of them falling straight through to V7 as "forbidden apiVersion".
+    all_findings = inv.findings + res.findings + extra_findings
 
     changed = {
         rel for rel, text in res.files.items()
