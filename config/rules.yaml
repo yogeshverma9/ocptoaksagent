@@ -24,7 +24,7 @@ transform:
     severity: HIGH
   - id: T6
     name: dns-remap
-    description: '*.ocp.internal.spark.co.nz becomes *.aks.internal.spark.co.nz'
+    description: "*.ocp.internal.spark.co.nz becomes *.aks.internal.spark.co.nz"
     severity: BLOCK
   - id: T7
     name: env-matrix-expand
@@ -32,7 +32,8 @@ transform:
     severity: BLOCK
   - id: T8
     name: cd-orchestrator-param-sync
-    description: Stages calling template deploy.yaml get its new parameter contract
+    description:
+      Stages calling template deploy.yaml get its new parameter contract
       (endpoint becomes subscription/RG/cluster/namespace) plus a stage pool
     severity: BLOCK
   - id: T9
@@ -47,7 +48,8 @@ transform:
     severity: BLOCK
   - id: T11
     name: buildconfig-removed
-    description: OpenShift BuildConfig removed - in-cluster source-to-image builds
+    description:
+      OpenShift BuildConfig removed - in-cluster source-to-image builds
       have no AKS equivalent and must move into the CI pipeline
     severity: BLOCK
   - id: T12
@@ -116,6 +118,6 @@ llm_refine:
 
 judge:
   thresholds:
-    block: 1        # any BLOCK finding blocks
-    review: 1       # any HIGH/MEDIUM finding requires review
+    block: 1 # any BLOCK finding blocks
+    review: 1 # any HIGH/MEDIUM finding requires review
   needsInputIsBlocking: false
