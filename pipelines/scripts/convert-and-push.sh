@@ -58,9 +58,9 @@ if git diff --cached --quiet; then
   exit 0
 fi
 
-COMMIT_MSG="aks-migrator: convert OCP to AKS [skip ci]"
+COMMIT_MSG="aks-migrator: convert OCP to AKS"
 if [ "$MIGRATE_EXIT" -eq 2 ]; then
-  COMMIT_MSG="aks-migrator: convert OCP to AKS (BLOCKED - see aks/validation.md) [skip ci]"
+  COMMIT_MSG="aks-migrator: convert OCP to AKS (BLOCKED - see aks/validation.md)"
 fi
 # [skip ci] is a widely-recognised convention (Azure Pipelines honours
 # ***NO_CI*** / [skip ci] in the commit message) - prevents this push from
