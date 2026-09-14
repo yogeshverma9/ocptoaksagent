@@ -103,3 +103,34 @@ flattened plain manifests - the templates still contain `{{ .Values.x }}`
 syntax. `helm lint` here validates that chart directly; this is also the
 pattern `aks-migrator` itself generates for a *migrated application's own*
 CD pipeline (see rule `T2` in [`config/rules.yaml`](../config/rules.yaml)).
+
+## Troubleshooting
+
+### `remote: Permission ... denied to azure-pipelines[bot]` / `git push` fails with 403
+
+```
+remote: Permission to <owner>/<repo>.git denied to azure-pipelines[bot].
+fatal: unable to access 'https://github.com/<owner>/<repo>/': The requested URL returned error: 403
+```
+
+This means the `git push` back into Repo A (the `ocpSource` checkout, via
+`persistCredentials: true`) is authenticating as the GitHub App/OAuth
+identity behind the `endpoint:` service connection, and that identity only
+has **read** access (or isn't installed at all) on Repo A. This is the
+one-time setup from step 1 above not being fully done yet. To fix it,
+either:
+
+- On GitHub: Repo A → Settings → Integrations → GitHub Apps → the
+  **Azure Pipelines** app → Configure → confirm Repo A is selected and its
+  permission is **Contents: Read and write** (not just Read).
+- Or, in Azure DevOps: Project Settings → Service connections → the
+  `endpoint:` connection named in `azure-pipelines.yaml` → recreate it
+  using a **Personal Access Token** grant (a GitHub PAT scoped with
+  `repo`) instead of the OAuth/GitHub App grant.
+- Either way, confirm the service connection itself is authorized for use
+  by this pipeline (Service connections → ... → "Grant access to all
+  pipelines", or approve it per-pipeline on first use).
+
+The `self` checkout (Repo B) never hits this, since it doesn't need a
+separate `endpoint:` - only `resources.repositories` entries like
+`ocpSource` do.
