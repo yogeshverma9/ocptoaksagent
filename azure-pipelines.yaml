@@ -12,10 +12,10 @@ resources:
     - repository: ocpSource
       type: github
       # <github-owner>/<repo> - the OCP source repo on GitHub.
-      name: yogeshverma9/nginxapp
+      name: yogeshverma9/ocpdemoapp
       # A GitHub service connection (Project Settings > Service connections
       # > New > GitHub) whose token has "repo" (read+write) access to
-      # arun-jathari/nginx-app - required both to check it out and to push
+      # yogeshverma9/ocpdemoapp - required both to check it out and to push
       # the converted aks/ folder back. This must be the *name* of the
       # service connection (Project Settings > Service connections page),
       # not the repo/owner name or a URL.

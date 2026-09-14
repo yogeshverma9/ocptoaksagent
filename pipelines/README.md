@@ -30,7 +30,7 @@ resources:
   repositories:
     - repository: ocpSource
       type: github
-      name: YOUR_GITHUB_OWNER/YOUR_OCP_SOURCE_REPO   # <- e.g. arun-jathari/nginx-app
+      name: YOUR_GITHUB_OWNER/YOUR_OCP_SOURCE_REPO   # <- e.g. yogeshverma9/nginx-app
       endpoint: YOUR_GITHUB_SERVICE_CONNECTION        # <- see step 1 below
       ref: refs/heads/main
 ```
