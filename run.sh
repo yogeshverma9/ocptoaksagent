@@ -54,6 +54,11 @@ LLM_ENDPOINT="${LLM_ENDPOINT:-http://host.docker.internal:11434}"
 LLM_MODEL="${LLM_MODEL:-}"
 LLM_SEED="${LLM_SEED:-}"
 LLM_TIMEOUT="${LLM_TIMEOUT:-}"
+# Vendor switch (blank = whatever config/models.yaml has). Supported:
+# ollama | azure_openai | openai | anthropic | null.
+LLM_PROVIDER="${LLM_PROVIDER:-}"
+LLM_API_KEY="${LLM_API_KEY:-}"
+LLM_API_VERSION="${LLM_API_VERSION:-}"
 FREEZE_OUTPUT="${FREEZE_OUTPUT:-false}"
 LLM_FORCE_REFRESH="${LLM_FORCE_REFRESH:-false}"
 # Frozen/cached LLM responses live under $OUT_DIR by default, so they
@@ -100,6 +105,9 @@ LLM_ARGS=(
 [ -n "$LLM_SEED" ] && LLM_ARGS+=(-e "LLM_SEED=$LLM_SEED")
 [ -n "$LLM_TIMEOUT" ] && LLM_ARGS+=(-e "LLM_TIMEOUT=$LLM_TIMEOUT")
 [ -n "$LLM_CACHE_DIR" ] && LLM_ARGS+=(-e "LLM_CACHE_DIR=$LLM_CACHE_DIR")
+[ -n "$LLM_PROVIDER" ] && LLM_ARGS+=(-e "LLM_PROVIDER=$LLM_PROVIDER")
+[ -n "$LLM_API_KEY" ] && LLM_ARGS+=(-e "LLM_API_KEY=$LLM_API_KEY")
+[ -n "$LLM_API_VERSION" ] && LLM_ARGS+=(-e "LLM_API_VERSION=$LLM_API_VERSION")
 
 DOCKER="docker"
 
@@ -131,6 +139,13 @@ EOF
 # with localhost since that's what --add-host=host.docker.internal:host-gateway
 # resolves to for the container.
 require_llm() {
+  # Only Ollama has a cheap, unauthenticated reachability endpoint worth
+  # preflighting from the host - hosted providers (azure_openai/openai/
+  # anthropic) can't be checked without spending a real call, so let the
+  # first in-container request surface any misconfig instead.
+  case "$(echo "$LLM_PROVIDER" | tr '[:upper:]' '[:lower:]')" in
+    azure_openai|openai|anthropic|null|none) return 0 ;;
+  esac
   command -v curl >/dev/null 2>&1 || return 0
   local check_url="${LLM_ENDPOINT/host.docker.internal/localhost}"
   if curl -fsS --max-time 5 "$check_url/api/tags" >/dev/null 2>&1; then

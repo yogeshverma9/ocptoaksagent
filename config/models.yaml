@@ -17,6 +17,24 @@ llm:
   api_key: ${LLM_API_KEY}
   timeout_seconds: 600
 
+# To switch vendor without editing this file, set LLM_PROVIDER (+ the
+# vendor's required env vars) in migration.env - see migration.env for the
+# full list. The blocks below document what a hosted-provider config looks
+# like when you'd rather commit it here instead of driving from env vars.
+#
+# Azure OpenAI:
+#   provider: azure_openai
+#   model: <your-deployment-name>       # NOT the model id
+#   endpoint: https://<res>.openai.azure.com
+#   api_key: ${LLM_API_KEY}
+#   api_version: "2024-06-01"
+#
+# OpenAI:
+#   provider: openai
+#   model: gpt-4o-mini
+#   endpoint: https://api.openai.com/v1
+#   api_key: ${LLM_API_KEY}
+
 embeddings:
   provider: "null"
   model: none
