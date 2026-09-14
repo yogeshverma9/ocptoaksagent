@@ -456,6 +456,32 @@ def transform(inv: Inventory, cfg, env: dict[str, Any]) -> TransformResult:
         else:
             res.files[rel] = "---\n".join(remaining)
 
+    # ---- T12 HPA scaleTargetRef remap: DeploymentConfig -> Deployment
+    # An HPA may itself already be autoscaling/v2 (so T3 skipped it) but still
+    # point spec.scaleTargetRef at an OpenShift DeploymentConfig. Left as-is,
+    # V7 (forbiddenApiVersions) would BLOCK on the residual "apps.openshift.io/v1"
+    # string inside scaleTargetRef, and the LLM refine pass is an unreliable
+    # place to fix something this mechanical.
+    scale_ref_re = re.compile(
+        r"(scaleTargetRef:\s*\n"
+        r"(?:\s+\S.*\n)*?"
+        r"\s+apiVersion:\s*)apps\.openshift\.io/v1"
+        r"((?:\s+\S.*\n)*?"
+        r"\s+kind:\s*)DeploymentConfig",
+    )
+    for rel, text in list(res.files.items()):
+        if "HorizontalPodAutoscaler" not in text or "scaleTargetRef" not in text:
+            continue
+        new, n = scale_ref_re.subn(r"\1apps/v1\2Deployment", text)
+        if n:
+            res.files[rel] = new
+            res.findings.append(
+                Finding("T12", "HPA scaleTargetRef remapped to Deployment",
+                        Severity.INFO, rel,
+                        f"Rewrote {n} scaleTargetRef block(s) from apps.openshift.io/v1 "
+                        "DeploymentConfig to apps/v1 Deployment.",
+                        auto_fixed=True))
+
     # ---- T2 + T5 + T7 pipeline rewrite
     for rel, text in list(res.files.items()):
         if "HelmDeploy@0" not in text and "kubernetesServiceEndpoint" not in text:

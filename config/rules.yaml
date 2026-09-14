@@ -50,6 +50,11 @@ transform:
     description: OpenShift BuildConfig removed - in-cluster source-to-image builds
       have no AKS equivalent and must move into the CI pipeline
     severity: BLOCK
+  - id: T12
+    name: hpa-scaletargetref-remap
+    description: HorizontalPodAutoscaler.spec.scaleTargetRef pointing at
+      apps.openshift.io/v1 DeploymentConfig becomes apps/v1 Deployment
+    severity: BLOCK
 
 remediate:
   - id: M1
