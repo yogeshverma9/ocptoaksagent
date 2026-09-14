@@ -96,7 +96,9 @@ def migrate(repo, env_name, mode, workspace, out_dir, config_dir, fail_on_block,
                  f"llm={provider.name}  freeze={freeze_output}")
 
     console.print("[bold]1/7[/] Discover")
-    inv = discover(root)
+    # Exclude out_dir when it lives inside the workspace, so re-runs don't
+    # pick up their own previous output and nest it (aks/aks/aks/...).
+    inv = discover(root, exclude=[out])
     console.print(f"      {len(inv.files)} file(s); "
                   f"{sum(1 for m in inv.files.values() if m['ocp_score'])} with OpenShift coupling")
 

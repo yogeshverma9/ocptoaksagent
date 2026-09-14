@@ -85,12 +85,25 @@ def _parse_yaml_docs(text: str) -> list[dict[str, Any]]:
     return out
 
 
-def discover(root: Path) -> Inventory:
+def discover(root: Path, *, exclude: list[Path] | None = None) -> Inventory:
     inv = Inventory(root)
     skip = {".git", "node_modules", "dist", "test", "tests", ".venv", "__pycache__"}
+    # Normalised, absolute paths of subtrees to skip - typically the previous
+    # run's out-dir, when it lives inside `root`. Without this, re-runs pick
+    # up their own output and end up nesting it (aks/aks/aks/...).
+    exclude_abs = [p.resolve() for p in (exclude or []) if p.exists()]
 
     for path in sorted(root.rglob("*")):
         if not path.is_file():
+            continue
+        try:
+            resolved = path.resolve()
+        except OSError:
+            continue
+        if any(
+            resolved == ex or ex in resolved.parents
+            for ex in exclude_abs
+        ):
             continue
         rel = path.relative_to(root).as_posix()
         if any(part in skip for part in path.relative_to(root).parts[:-1]):
