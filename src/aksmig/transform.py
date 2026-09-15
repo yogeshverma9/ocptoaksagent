@@ -36,6 +36,37 @@ INGRESS_TLS_BLOCK = """  tls:
       secretName: {secret_name}
 """
 
+# Plain-manifest counterparts, used when the source repo is NOT a Helm chart
+# (no Chart.yaml, no helm/templates/). Literal values are lifted from the
+# source Route document; T6 (dns remap) later rewrites the host if it matches
+# the legacy OCP pattern - same as it does for a Helm chart's values file.
+INGRESS_MANIFEST_TEMPLATE = """apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+{annotations}
+{labels_block}  name: {name}
+{namespace_block}spec:
+  ingressClassName: {ingress_class}
+{tls_block}  rules:
+    - host: {host}
+      http:
+        paths:
+          - path: {path}
+            pathType: Prefix
+            backend:
+              service:
+                name: {service_name}
+                port:
+                  {port_field}: {port_value}
+"""
+
+INGRESS_MANIFEST_TLS_BLOCK = """  tls:
+    - hosts:
+        - {host}
+      secretName: {secret_name}
+"""
+
 HPA_V2_TEMPLATE = """apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
@@ -54,6 +85,26 @@ spec:
         target:
           type: Utilization
           averageUtilization: {{{{ .Values.hpa.targetCPUUtilizationPercentage }}}}
+"""
+
+HPA_V2_MANIFEST_TEMPLATE = """apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {name}
+{namespace_block}spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {target_name}
+  minReplicas: {min_replicas}
+  maxReplicas: {max_replicas}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {target_cpu}
 """
 
 DEPLOY_TEMPLATE = """parameters:
@@ -229,11 +280,60 @@ def _memory_units(text: str) -> tuple[str, int]:
     return pattern.sub(sub, text), count
 
 
+def _is_helm_chart(inv: Inventory) -> bool:
+    """True when the source repo is a Helm chart, not plain manifests.
+
+    Signals, either of which is sufficient:
+    - a Chart.yaml exists anywhere in the tree, OR
+    - there is at least one file under a `.../templates/` directory that
+      contains Go template markers ({{ ... }}).
+    """
+    for rel in inv.files:
+        name = rel.rsplit("/", 1)[-1]
+        if name == "Chart.yaml":
+            return True
+    for rel in inv.helm_templates:
+        if "{{" in inv.text(rel):
+            return True
+    return False
+
+
+def _extract_metadata_block(text: str, key: str) -> str:
+    """Return the raw `metadata.<key>` YAML block (indented body incl. header)
+    of the first document in `text`, or '' if not present. Used to carry the
+    source Route/HPA's metadata.namespace and metadata.labels through to the
+    emitted plain-manifest output verbatim."""
+    m = re.search(
+        rf"^metadata:\s*\n(?:(?P<body>(?:[ \t]+.+\n?)+))",
+        text, re.M,
+    )
+    if not m:
+        return ""
+    body = m.group("body")
+    inner = re.search(
+        rf"^(?P<indent>[ \t]+){re.escape(key)}:\s*(?P<inline>\S.*)?\n(?P<sub>(?:(?P=indent)[ \t]+.+\n?)*)",
+        body, re.M,
+    )
+    if not inner:
+        return ""
+    header = f"  {key}:"
+    inline = inner.group("inline")
+    if inline is not None:
+        return f"{header} {inline}\n"
+    sub = inner.group("sub") or ""
+    reindented = "".join(
+        "  " + ln[len(inner.group("indent")):] if ln.strip() else ln
+        for ln in sub.splitlines(keepends=True)
+    )
+    return f"{header}\n{reindented}"
+
+
 def transform(inv: Inventory, cfg, env: dict[str, Any]) -> TransformResult:
     res = TransformResult()
     std = cfg.standards
     tier = env.get("tier", env["name"])
     ingress_class = std["ingress"]["class"]
+    is_chart = _is_helm_chart(inv)
 
     # A file that matches a specific environment's `valuesFile` (see
     # config/env-matrix.yaml) belongs to that environment even when other
@@ -264,17 +364,11 @@ def transform(inv: Inventory, cfg, env: dict[str, Any]) -> TransformResult:
         # We cannot know the AKS-side secret name automatically, so surface it as
         # NEEDS_INPUT rather than silently downgrading to plain HTTP.
         tls_m = re.search(r"^\s*tls:\s*\n(?:\s+\S.*\n?)+", text, re.M)
-        tls_block = ""
-        if tls_m:
-            tls_block = INGRESS_TLS_BLOCK.format(
-                secret_name='{{ .Values.route.tlsSecretName }}')
-            res.findings.append(
-                Finding("T1", "Route TLS termination requires a secretName",
-                        Severity.NEEDS_INPUT, rel,
-                        "The source Route specified TLS. The emitted Ingress references "
-                        ".Values.route.tlsSecretName, which is not yet defined.",
-                        remediation="Provision/import the TLS secret on AKS and set "
-                                    "route.tlsSecretName in the environment's values file."))
+        # Chart mode carries the TLS secret name through Values; manifest mode
+        # has nowhere to hide the fact that a real secret has to exist first.
+        tls_secret_placeholder = (
+            '{{ .Values.route.tlsSecretName }}' if is_chart else 'REPLACE_ME_TLS_SECRET'
+        )
 
         anns = {**std["ingress"].get("requiredAnnotations", {})}
         for review in std["ingress"].get("reviewAnnotations", []):
@@ -295,19 +389,88 @@ def transform(inv: Inventory, cfg, env: dict[str, Any]) -> TransformResult:
         ann_block = "\n".join(f'    {k}: "{v}"'.replace('""', '"') for k, v in anns.items())
 
         target = rel.replace("route.yaml", "ingress.yaml").replace("route.yml", "ingress.yaml")
-        res.files[target] = INGRESS_TEMPLATE.format(
-            annotations=ann_block or "    {}",
-            name=name.group(1) if name else "app-ingress",
-            ingress_class=ingress_class,
-            tls_block=tls_block,
-            path=route_path,
-            service_name=svc.group(1) if svc else "app-service",
-        )
+        ingress_name = name.group(1) if name else "app-ingress"
+        service_name = svc.group(1) if svc else "app-service"
+
+        if is_chart:
+            tls_block = ""
+            if tls_m:
+                tls_block = INGRESS_TLS_BLOCK.format(secret_name=tls_secret_placeholder)
+                res.findings.append(
+                    Finding("T1", "Route TLS termination requires a secretName",
+                            Severity.NEEDS_INPUT, rel,
+                            "The source Route specified TLS. The emitted Ingress references "
+                            ".Values.route.tlsSecretName, which is not yet defined.",
+                            remediation="Provision/import the TLS secret on AKS and set "
+                                        "route.tlsSecretName in the environment's values file."))
+            res.files[target] = INGRESS_TEMPLATE.format(
+                annotations=ann_block or "    {}",
+                name=ingress_name,
+                ingress_class=ingress_class,
+                tls_block=tls_block,
+                path=route_path,
+                service_name=service_name,
+            )
+        else:
+            # Plain-manifest mode: lift host/port/namespace/labels from the
+            # source Route document verbatim, no Helm templating in output.
+            host_m = re.search(r"^\s*host:\s*(\S+)", text, re.M)
+            host = host_m.group(1).strip('"\'') if host_m else "REPLACE_ME_HOST"
+            if not host_m:
+                res.findings.append(
+                    Finding("T1", "Route had no explicit host (OCP auto-generated it)",
+                            Severity.NEEDS_INPUT, rel,
+                            "The source Route relied on OpenShift's auto-generated host "
+                            "(openshift.io/host.generated). AKS/Ingress requires an explicit host.",
+                            remediation=f"Set spec.rules[0].host in {target} to the DNS name "
+                                        "you want to expose."))
+            port_m = re.search(r"port:\s*\n\s*targetPort:\s*(\S+)", text)
+            if port_m:
+                raw = port_m.group(1).strip('"\'')
+                port_field = "number" if raw.isdigit() else "name"
+                port_value = raw
+            else:
+                port_field, port_value = "number", "80"
+                res.findings.append(
+                    Finding("T1", "Route had no spec.port.targetPort",
+                            Severity.NEEDS_INPUT, rel,
+                            "Emitted Ingress defaulted backend service port to 80.",
+                            remediation=f"Set backend.service.port in {target} to the "
+                                        "container port your Service targets."))
+            namespace_block = _extract_metadata_block(text, "namespace")
+            labels_block = _extract_metadata_block(text, "labels")
+            tls_block = ""
+            if tls_m:
+                tls_block = INGRESS_MANIFEST_TLS_BLOCK.format(
+                    host=host, secret_name=tls_secret_placeholder,
+                )
+                res.findings.append(
+                    Finding("T1", "Route TLS termination requires a secretName",
+                            Severity.NEEDS_INPUT, rel,
+                            f"The source Route specified TLS. The emitted Ingress references "
+                            f"secretName {tls_secret_placeholder!r}, which does not exist yet.",
+                            remediation=f"Provision/import the TLS secret on AKS and set "
+                                        f"spec.tls[0].secretName in {target}."))
+            res.files[target] = INGRESS_MANIFEST_TEMPLATE.format(
+                annotations=ann_block or "    {}",
+                labels_block=labels_block,
+                name=ingress_name,
+                namespace_block=namespace_block,
+                ingress_class=ingress_class,
+                tls_block=tls_block,
+                host=host,
+                path=route_path,
+                service_name=service_name,
+                port_field=port_field,
+                port_value=port_value,
+            )
+
         res.deleted.append(rel)
         del res.files[rel]
         res.findings.append(
             Finding("T1", "Route converted to Ingress", Severity.INFO, rel,
-                    f"Emitted {target} with ingressClassName={ingress_class}",
+                    f"Emitted {target} with ingressClassName={ingress_class} "
+                    f"({'Helm-templated' if is_chart else 'plain manifest'})",
                     auto_fixed=True))
 
     # ---- T3 hpa v1 -> v2
@@ -315,10 +478,27 @@ def transform(inv: Inventory, cfg, env: dict[str, Any]) -> TransformResult:
         if "autoscaling/v1" not in text or "HorizontalPodAutoscaler" not in text:
             continue
         name = re.search(r"^\s*name:\s*(\{\{.*?\}\}|[\w.-]+)", text, re.M)
-        res.files[rel] = HPA_V2_TEMPLATE.format(name=name.group(1) if name else "app")
+        hpa_name = name.group(1) if name else "app"
+        if is_chart:
+            res.files[rel] = HPA_V2_TEMPLATE.format(name=hpa_name)
+        else:
+            min_m = re.search(r"^\s*minReplicas:\s*(\S+)", text, re.M)
+            max_m = re.search(r"^\s*maxReplicas:\s*(\S+)", text, re.M)
+            cpu_m = re.search(r"^\s*targetCPUUtilizationPercentage:\s*(\S+)", text, re.M)
+            target_m = re.search(r"scaleTargetRef:\s*\n(?:\s+.+\n)*?\s*name:\s*(\S+)", text)
+            namespace_block = _extract_metadata_block(text, "namespace")
+            res.files[rel] = HPA_V2_MANIFEST_TEMPLATE.format(
+                name=hpa_name,
+                namespace_block=namespace_block,
+                target_name=target_m.group(1) if target_m else hpa_name,
+                min_replicas=min_m.group(1) if min_m else "1",
+                max_replicas=max_m.group(1) if max_m else "3",
+                target_cpu=cpu_m.group(1) if cpu_m else "70",
+            )
         res.findings.append(
             Finding("T3", "HPA upgraded to autoscaling/v2", Severity.INFO, rel,
-                    "Replaced targetCPUUtilizationPercentage with a metrics block",
+                    "Replaced targetCPUUtilizationPercentage with a metrics block "
+                    f"({'Helm-templated' if is_chart else 'plain manifest'})",
                     auto_fixed=True))
 
     # ---- T4 memory units

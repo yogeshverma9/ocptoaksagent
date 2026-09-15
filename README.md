@@ -200,8 +200,8 @@ Seven stages execute in order:
 
 | # | Stage | What happens |
 |---|---|---|
-| 1 | **DISCOVER** | Walks `/workspace`, classifies every YAML and Dockerfile, scores OpenShift coupling by scanning for markers (`route.openshift.io`, `HelmDeploy@0`, `autoscaling/v1`, `.ocp.internal.spark.co.nz`, …) |
-| 2 | **TRANSFORM** | Applies rules **T1–T7** — make it AKS-native |
+| 1 | **DISCOVER** | Walks `/workspace`, classifies every YAML and Dockerfile, scores OpenShift coupling by scanning for markers (`route.openshift.io`, `HelmDeploy@0`, `autoscaling/v1`, `.ocp.internal.spark.co.nz`, …). Also detects whether the source is a **Helm chart** (`Chart.yaml`/`templates/…{{ }}` markers present) or **plain manifests**, which some transforms branch on. |
+| 2 | **TRANSFORM** | Applies rules **T1–T12** — make it AKS-native |
 | 3 | **REMEDIATE** | Applies rules **M1–M9** — fix latent defects OCP tolerated but AKS will reject |
 | 4 | **REFINE (LLM)** | The model reviews every file TRANSFORM/REMEDIATE touched and may rewrite it — mandatory, every run (see [`AGENTIC_FRAMEWORK.md`](AGENTIC_FRAMEWORK.md)) |
 | 5 | **RENDER** | Writes migrated artefacts to `aks/rendered/` and computes a unified diff |
@@ -212,6 +212,12 @@ Seven stages execute in order:
 
 - **TRANSFORM** = *"make it AKS-native."* Route → Ingress. `HelmDeploy@0` →
   `AzureCLI@2`. `autoscaling/v1` → `v2`. Pool remap. DNS remap.
+  DeploymentConfig → Deployment. ImageStream/BuildConfig removed with a
+  finding. HPA `scaleTargetRef` remapped off `DeploymentConfig`.
+  **Chart-aware:** if DISCOVER identified the source as a Helm chart, T1/T3
+  emit Helm-templated output (`{{ .Values.route.host }}`, etc.); if it's
+  plain manifests, T1/T3 emit concrete literal values lifted verbatim from
+  the source Route/HPA (host, port, namespace, labels).
 - **REMEDIATE** = *"fix what was already broken."* A committed production
   secret. A Helm template referencing a value no file defines. CronJobs that
   silently vanish in four of five environments. A Dockerfile running as root.
@@ -424,7 +430,7 @@ mandatory](#the-llm-is-mandatory)):
 
 | Mode | Cluster | Adds |
 |---|---|---|
-| `offline` | ✗ | Rules T1–T7 + M1–M9, LLM refine, helm lint/template, kubeconform, conftest, trivy. **Default.** |
+| `offline` | ✗ | Rules T1–T12 + M1–M9, LLM refine, helm lint/template, kubeconform, conftest, trivy. **Default.** |
 | `assisted` | ✗ | Same as offline — kept for backwards compatibility with existing scripts/CI |
 | `connected` | read-only | Adds `helm --dry-run=server`, `kubectl auth can-i` |
 

@@ -170,7 +170,7 @@ straight from the [README](../README.md) and
 1. Architecture — the seven-stage agent loop (Discover / Transform /
    Remediate / **Refine (LLM)** / Render / Validate / Judge) and why the
    LLM is mandatory but still never makes the final call.
-2. Rule catalogue — walk `config/rules.yaml` (T1–T8, M1–M9, plus L1–L3 for
+2. Rule catalogue — walk `config/rules.yaml` (T1–T12, M1–M9, plus L1–L3 for
    the LLM refine stage) with one real example finding each.
 3. Live demo — `./run.sh demo` end to end, then `./run.sh report`. Consider
    running it once already frozen (`FREEZE_OUTPUT=true`) beforehand so the

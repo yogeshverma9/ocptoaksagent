@@ -20,9 +20,12 @@ or open-ended agent — every run is bounded, ordered, and auditable:
 
 ```
  1. DISCOVER    perceive:  walk the repo, classify every file, score
-                           OpenShift coupling
+                           OpenShift coupling; detect chart-vs-manifests
+                           mode (Chart.yaml/templates present or not)
  2. TRANSFORM   act:       deterministic rules rewrite OpenShift constructs
-                           to their AKS equivalent (T1-T8)
+                           to their AKS equivalent (T1-T12); T1/T3 emit
+                           Helm-templated output in chart mode, concrete
+                           literal values in plain-manifest mode
  3. REMEDIATE   perceive:  deterministic rules detect latent defects
                            OpenShift tolerated but AKS will reject (M1-M9)
  4. REFINE      act (LLM): the model reviews every file TRANSFORM/REMEDIATE
@@ -241,7 +244,7 @@ tunes per run.
 
 Not everything moved to the LLM, and that's intentional:
 
-- **TRANSFORM (T1-T8)** and **REMEDIATE (M1-M9)** remain plain rule-engine
+- **TRANSFORM (T1-T12)** and **REMEDIATE (M1-M9)** remain plain rule-engine
   code (`transform.py`, `remediate.py`). They are what the golden-diff score
   (`./run.sh golden`) is measured against, and what makes "this finding is
   rule `M3`" a reproducible, inspectable claim rather than a model's opinion.
