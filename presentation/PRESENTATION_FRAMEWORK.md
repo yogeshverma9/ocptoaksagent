@@ -10,7 +10,7 @@ Audience: **leadership / stakeholders.** Optimise for business value, risk
 reduction and a clear ask — not implementation detail. If a technical
 follow-up is needed, use the [README](../README.md) and
 [`AGENTIC_FRAMEWORK.md`](../AGENTIC_FRAMEWORK.md), and offer a live
-`./run.sh demo` instead of more slides.
+`./run.sh migrate` instead of more slides.
 
 ---
 
@@ -172,9 +172,9 @@ straight from the [README](../README.md) and
    LLM is mandatory but still never makes the final call.
 2. Rule catalogue — walk `config/rules.yaml` (T1–T12, M1–M9, plus L1–L3 for
    the LLM refine stage) with one real example finding each.
-3. Live demo — `./run.sh demo` end to end, then `./run.sh report`. Consider
-   running it once already frozen (`FREEZE_OUTPUT=true`) beforehand so the
-   live demo takes seconds, not minutes — explain that trade-off honestly.
+3. Live migration — `./run.sh migrate` end to end, then `./run.sh report`.
+  Consider running it once already frozen (`FREEZE_OUTPUT=true`) beforehand
+  so the live run takes seconds, not minutes — explain that trade-off honestly.
 4. The Migration Workbook — show `migration-intake.example.txt` →
    `migration_workbook.md`, and the storage/network mapping tables in
    `config/mappings.yaml`.
@@ -188,9 +188,9 @@ straight from the [README](../README.md) and
 
 ## 6. Before you present — checklist
 
-- [ ] Re-run `./run.sh demo && ./run.sh golden` and refresh the numbers in
-      `build_onepager.py` if it's been a while (rules/fixtures/model may
-      have changed). Regenerate with `python presentation/build_onepager.py`.
+- [ ] Re-run `./run.sh migrate` and refresh the numbers in `build_onepager.py`
+  if it's been a while (rules/model may have changed). Regenerate with
+  `python presentation/build_onepager.py`.
 - [ ] If presenting live, consider running once beforehand with
       `FREEZE_OUTPUT=true` so the on-stage run replays in seconds instead of
       taking minutes to generate fresh — and be ready to explain why, if asked.

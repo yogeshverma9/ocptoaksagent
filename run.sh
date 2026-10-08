@@ -13,7 +13,7 @@ ROOT="$(here)"
 # Loads REPO, REPO_BRANCH, ENV, MODE, FAIL_ON_BLOCK, OUT_DIR, CONFIG_DIR and
 # WORKBOOK_INTAKE from migration.env, if present (copy migration.env.example
 # to get started). A shell env var you set explicitly on the command line
-# (e.g. `ENV=int ./run.sh demo`) always takes priority over the file.
+# always takes priority over the file.
 load_job_file() {
   local f="$ROOT/migration.env"
   [ -f "$f" ] || return 0
@@ -175,28 +175,6 @@ selftest() {
   $DOCKER run --rm "${LLM_ARGS[@]}" "$IMAGE" selftest
 }
 
-demo() {
-  require_docker
-  require_llm
-  mkdir -p "$OUT_DIR"
-  if [ ! -d "$ROOT/tests/fixtures/pdfgenerator-ocp" ]; then
-    echo "Fixtures missing. Run: ./run.sh fetch" >&2
-    exit 1
-  fi
-  $DOCKER run --rm \
-    --user "$(id -u):$(id -g)" \
-    -v "$ROOT/tests/fixtures/pdfgenerator-ocp:/workspace:ro" \
-    -v "$OUT_DIR:/aks" \
-    -v "$CONFIG_DIR:/config:ro" \
-    "${LLM_ARGS[@]}" \
-    "$IMAGE" migrate \
-      --repo BillingDevOps_PDFGenerator \
-      --env "${ENVIRONMENT:-dev}" \
-      --mode "$MODE" \
-      --out /aks \
-      $(fail_on_block_flag)
-}
-
 # Windows holds file handles (antivirus, indexer, editor watchers) briefly after
 # a clone, so a plain `rm -rf` can fail with "Device or resource busy".
 # Retry a few times, then warn instead of aborting the whole script.
@@ -300,34 +278,9 @@ workbook() {
 }
 
 golden() {
-  require_docker
-  $DOCKER run --rm --network none \
-    --user "$(id -u):$(id -g)" \
-    -v "$ROOT/tests/fixtures:/fixtures:ro" \
-    -v "$OUT_DIR:/aks" \
-    -v "$CONFIG_DIR:/config:ro" \
-    "$IMAGE" golden \
-      --candidate /aks \
-      --reference /fixtures/pdfgenerator-aks \
-      --out /aks
-}
-
-fetch() {
-  local tmp="$ROOT/.tmp-fixtures"
-  force_rm "$tmp"
-  echo "Cloning BillingDevOps_PDFGenerator..."
-  git clone --quiet https://github.com/sparknz/BillingDevOps_PDFGenerator.git "$tmp"
-
-  ( cd "$tmp" && git checkout --quiet master )
-  mkdir -p "$ROOT/tests/fixtures/pdfgenerator-ocp"
-  cp -r "$tmp/helm" "$tmp/pipeline" "$tmp/Dockerfile" "$ROOT/tests/fixtures/pdfgenerator-ocp/"
-
-  ( cd "$tmp" && git checkout --quiet user/t988794/aks_migration )
-  mkdir -p "$ROOT/tests/fixtures/pdfgenerator-aks"
-  cp -r "$tmp/helm" "$tmp/pipeline" "$ROOT/tests/fixtures/pdfgenerator-aks/"
-
-  force_rm "$tmp"
-  echo "Fixtures ready. Now run: ./run.sh demo"
+  echo "The fixture-based golden comparison has been removed from this repo." >&2
+  echo "Use migrate + report on your own source checkout instead." >&2
+  exit 1
 }
 
 report() {
@@ -341,11 +294,8 @@ clean() {
 case "${1:-help}" in
   build)    build ;;
   selftest) selftest ;;
-  demo)     demo ;;
   migrate)  shift; migrate "$@" ;;
   workbook) shift; workbook "$@" ;;
-  golden)   golden ;;
-  fetch)    fetch ;;
   report)   report ;;
   clean)    clean ;;
   *)
@@ -354,13 +304,10 @@ Usage: ./run.sh <command>
 
   build                    Build the container image
   selftest                 Verify config and tooling inside the image
-  fetch                    Clone OCP + AKS fixtures from GitHub
-  demo                     Run offline migration against fixtures
   migrate [path-or-url]    Run against a real repo checkout or git URL
                            (falls back to REPO in migration.env, then ./ocp)
   workbook [path]          Build the migration workbook from a text intake file
                            (falls back to WORKBOOK_INTAKE in migration.env)
-  golden                   Score output vs the human AKS branch
   report                   Print $OUT_DIR/validation.md
   clean                    Remove $OUT_DIR
 
@@ -368,8 +315,7 @@ Convenience - migration.env:
   cp migration.env.example migration.env, then set REPO, ENV, MODE,
   FAIL_ON_BLOCK, OUT_DIR, CONFIG_DIR, WORKBOOK_INTAKE, and the LLM_*/
   FREEZE_OUTPUT settings below once instead of passing flags every time.
-  An explicit shell env var still wins, e.g. `ENV=int ./run.sh demo`
-  overrides ENV= in the file for that one run.
+  An explicit shell env var still wins for that one run.
 
 LLM (mandatory) + idempotency:
   Every run calls an LLM to review/refine the migrated files - see
@@ -397,8 +343,8 @@ Environment overrides:
   FAIL_ON_BLOCK=true|false           exit non-zero on BLOCK (default: true)
 
 Examples:
-  ./run.sh build && ./run.sh fetch && ./run.sh demo
-  ENV=int ./run.sh demo
+  ./run.sh build
+  ./run.sh selftest
   ./run.sh migrate /c/repos/BillingDevOps_PDFGenerator
   ./run.sh migrate https://github.com/sparknz/BillingDevOps_PDFGenerator.git
   ./run.sh workbook migration-intake.txt

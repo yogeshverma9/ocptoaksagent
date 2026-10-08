@@ -14,12 +14,12 @@ for presenting it.
 
 ## Regenerating the deck
 
-The numbers on the slide (rule counts, golden score, finding counts, LLM
-refine/revert counts, freeze timing) come from a real
-`./run.sh demo && ./run.sh golden` run — refresh them there first if it's
-been a while, then rebuild. Note that `demo` now calls a mandatory LLM (see
-the main [README](../README.md#the-llm-is-mandatory)); a smaller/faster
-local model (e.g. `LLM_MODEL=qwen2.5:1.5b`) keeps the refresh quick.
+The numbers on the slide (rule counts, finding counts, LLM refine/revert
+counts, freeze timing) come from a real `./run.sh migrate` run — refresh
+them there first if it's been a while, then rebuild. The main
+[README](../README.md#the-llm-is-mandatory) explains the LLM requirement;
+a smaller/faster local model (e.g. `LLM_MODEL=qwen2.5:1.5b`) keeps the
+refresh quick.
 
 ```bash
 python -m venv .venv        # if you don't already have one

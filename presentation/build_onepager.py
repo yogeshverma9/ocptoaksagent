@@ -2,8 +2,8 @@
 
 A single dense executive slide summarising the AKS Migration Agent for a
 leadership/stakeholder audience. Content lives here as code (not hand-edited
-in PowerPoint) so the numbers stay easy to refresh after a real ./run.sh demo
-+ ./run.sh golden run - see PRESENTATION_FRAMEWORK.md for the numbers' source
+in PowerPoint) so the numbers stay easy to refresh after a real
+./run.sh migrate run - see PRESENTATION_FRAMEWORK.md for the numbers' source
 and the talking points that go with each section.
 
 Numbers below are from a run with LLM_MODEL=qwen2.5:1.5b (a small local

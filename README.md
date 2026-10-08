@@ -2,7 +2,7 @@
 
 Model-independent, reference-driven OpenShift → AKS migration agent.
 Runs entirely inside one container. No cluster access and no cloud account
-are required for the default demo — but an LLM is mandatory on every run
+are required for the default run — but an LLM is mandatory on every run
 (local, via Ollama, by default: no API key, no per-call cost).
 
 | Layer | Question it answers |
@@ -39,8 +39,7 @@ are required for the default demo — but an LLM is mandatory on every run
 |---|---|---|
 | Docker Desktop, running | `docker version` | Everything runs in the container |
 | Ollama, running, with a model pulled | `curl http://localhost:11434/api/tags` | The LLM is mandatory every run - default provider is local Ollama (see [Prerequisites: the LLM](#the-llm-is-mandatory)) |
-| Git | `git --version` | Only needed for `fetch` |
-| Access to `sparknz/BillingDevOps_PDFGenerator` | `git ls-remote https://github.com/sparknz/BillingDevOps_PDFGenerator.git` | Only needed for `fetch` |
+| Git | `git --version` | Only needed if you use a git URL for `migrate` |
 
 `make` is **not** required. `run.sh` replaces it and works in Git Bash, WSL,
 macOS and Linux.
@@ -59,7 +58,7 @@ because the Dockerfile does `COPY policy /app/policy`.
 
 ## The LLM is mandatory
 
-Every run — `demo`, `migrate`, `selftest` — calls an LLM to review and
+Every run — `migrate`, `selftest` — calls an LLM to review and
 update the migrated files (see [`AGENTIC_FRAMEWORK.md`](AGENTIC_FRAMEWORK.md)
 for why, and what it is and isn't trusted to do). The default provider is
 **Ollama**: it runs on your machine, needs no API key and costs nothing per
@@ -89,14 +88,13 @@ web proxy should see) — if `selftest` still reports it unreachable, confirm
 ```bash
 chmod +x run.sh
 ./run.sh build
-./run.sh fetch
-./run.sh demo
+./run.sh selftest
+./run.sh migrate /c/repos/your-repo
 ./run.sh report
-./run.sh golden
 ```
 
-Expected end state: a **BLOCK** verdict and a populated `aks/` directory.
-That is the correct result — see [Reading the verdict](#reading-the-verdict).
+Expected end state: a populated `aks/` directory and a report you can review.
+If the source still contains blocking issues, the report will say so.
 
 ---
 
@@ -147,120 +145,6 @@ Run it any time the build looks suspicious.
 
 ---
 
-### `./run.sh fetch`
-
-**Populates `tests/fixtures/` with the real "golden pair" from GitHub.**
-
-Clones `sparknz/BillingDevOps_PDFGenerator` into a temporary directory, then
-extracts two snapshots:
-
-| Branch | Copied to | Represents |
-|---|---|---|
-| `master` | `tests/fixtures/pdfgenerator-ocp/` | **Input** — the OpenShift original |
-| `user/t988794/aks_migration` | `tests/fixtures/pdfgenerator-aks/` | **Reference** — the human-verified AKS migration |
-
-It copies only `helm/`, `pipeline/` and `Dockerfile` — the application source
-is irrelevant to a deployment migration. The temp clone is deleted afterwards.
-
-**Why this matters:** the agent is not evaluated against a synthetic example.
-It is scored against a migration a Spark engineer actually performed and
-deployed. `master` is the question; the migration branch is the marking guide.
-
-- **Duration:** under a minute.
-- **Requires network:** yes, plus repo access.
-- **Output:** `tests/fixtures/pdfgenerator-ocp/` and `.../pdfgenerator-aks/`.
-- **Idempotent:** safe to re-run; it overwrites.
-
-**Verify:**
-```bash
-ls tests/fixtures/pdfgenerator-ocp/helm
-```
-
-> If your access is via SSH rather than HTTPS, edit the `git clone` URL in
-> `run.sh` to `git@github.com:sparknz/BillingDevOps_PDFGenerator.git`.
-
----
-
-### `./run.sh demo`
-
-**The main event. Runs the full migration pipeline, offline.**
-
-Mounts three volumes into the container and runs `migrate`:
-
-| Host path | Container path | Mode |
-|---|---|---|
-| `tests/fixtures/pdfgenerator-ocp` | `/workspace` | read-only |
-| `config/` | `/config` | read-only |
-| `aks/` | `/aks` | writable |
-
-The source repository is mounted **read-only**. The agent is structurally
-incapable of modifying your input.
-
-Seven stages execute in order:
-
-| # | Stage | What happens |
-|---|---|---|
-| 1 | **DISCOVER** | Walks `/workspace`, classifies every YAML and Dockerfile, scores OpenShift coupling by scanning for markers (`route.openshift.io`, `HelmDeploy@0`, `autoscaling/v1`, `.ocp.example.com`, …). Also detects whether the source is a **Helm chart** (`Chart.yaml`/`templates/…{{ }}` markers present) or **plain manifests**, which some transforms branch on. |
-| 2 | **TRANSFORM** | Applies rules **T1–T12** — make it AKS-native |
-| 3 | **REMEDIATE** | Applies rules **M1–M9** — fix latent defects OCP tolerated but AKS will reject |
-| 4 | **REFINE (LLM)** | The model reviews every file TRANSFORM/REMEDIATE touched and may rewrite it — mandatory, every run (see [`AGENTIC_FRAMEWORK.md`](AGENTIC_FRAMEWORK.md)) |
-| 5 | **RENDER** | Writes migrated artefacts to `aks/rendered/` and computes a unified diff |
-| 6 | **VALIDATE** | Runs `helm lint --strict`, `helm template`, `kubeconform`, `conftest`, `trivy`, plus residual-OCP, forbidden-API and pipeline-hygiene scans — against the LLM's output, same as anything else |
-| 7 | **JUDGE** | Aggregates severity into one decision: `AUTO_APPROVE`, `NEEDS_REVIEW` or `BLOCK` — reads `Finding.severity` only, never LLM text |
-
-**Transform vs Remediate vs Refine — the distinction that matters:**
-
-- **TRANSFORM** = *"make it AKS-native."* Route → Ingress. `HelmDeploy@0` →
-  `AzureCLI@2`. `autoscaling/v1` → `v2`. Pool remap. DNS remap.
-  DeploymentConfig → Deployment. ImageStream/BuildConfig removed with a
-  finding. HPA `scaleTargetRef` remapped off `DeploymentConfig`.
-  **Chart-aware:** if DISCOVER identified the source as a Helm chart, T1/T3
-  emit Helm-templated output (`{{ .Values.route.host }}`, etc.); if it's
-  plain manifests, T1/T3 emit concrete literal values lifted verbatim from
-  the source Route/HPA (host, port, namespace, labels).
-- **REMEDIATE** = *"fix what was already broken."* A committed production
-  secret. A Helm template referencing a value no file defines. CronJobs that
-  silently vanish in four of five environments. A Dockerfile running as root.
-- **REFINE** = *"finish it."* The LLM reviews exactly the files the two
-  deterministic stages above already flagged, and may rewrite them — it
-  never touches a file neither stage cared about, and every edit still goes
-  through VALIDATE; one that fails is reverted to the deterministic version
-  (rule `L3`), never silently kept. A per-file call failure — timeout,
-  unreachable endpoint — is handled the same way (rule `L4`): that one
-  file keeps its deterministic output, and the run continues rather than
-  crashing (see `LLM_TIMEOUT` below if this happens often on slower/CPU-only
-  hardware).
-
-A tool that only transforms would faithfully carry every existing defect into
-AKS. Remediation is why the agent's output is expected to be a **superset** of
-the human migration branch — and why the golden score is judged `≥`, not `==`.
-
-**Offline mode specifics:**
-
-- `--network none` is *not* set here — the LLM call needs to reach Ollama
-  (or your configured provider), and trivy may consult local caches. No
-  cloud credentials are used with the default Ollama provider.
-- Server-side checks (`helm --dry-run=server`, `kubectl auth can-i`) are
-  skipped and reported as an `INFO` finding, not silently omitted.
-
-**Duration:** with the default model, seconds for the deterministic stages;
-the REFINE stage adds anywhere from under a minute to several minutes
-depending on model size, hardware, and how many files were touched — set
-`FREEZE_OUTPUT=true` once you're happy with a result to skip regeneration on
-every subsequent run (see [Idempotency: freezing a confirmed
-result](#idempotency-freezing-a-confirmed-result)).
-
-**Variations:**
-```bash
-ENV=int ./run.sh demo          # target the INT environment
-ENV=prd ./run.sh demo          # PRD — surfaces the committed secret
-LLM_MODEL=qwen2.5:1.5b ./run.sh demo   # a smaller/faster local model
-```
-
-**Exit code 2 is expected** and means `BLOCK`. It is a finding, not a crash.
-
----
-
 ### `./run.sh report`
 
 **Prints `aks/validation.md` — the human-readable report.**
@@ -288,34 +172,8 @@ Everything in `aks/`:
 Review the diff like a pull request:
 ```bash
 less aks/diff.patch
-git diff --no-index tests/fixtures/pdfgenerator-ocp aks/rendered
+git diff --no-index <your-source-tree> aks/rendered
 ```
-
----
-
-### `./run.sh golden`
-
-**Scores the agent's output against the human-verified AKS branch.**
-
-Compares `aks/rendered/` (agent) against `tests/fixtures/pdfgenerator-aks/`
-(human) file by file using sequence similarity, and prints a per-file table:
-
-| Status | Meaning |
-|---|---|
-| `match` (≥90%) | Agent reproduced the human migration |
-| `differs` (70–90%) | Close; inspect the diff |
-| `MISSING` | Agent failed to produce a file the human did — **a real gap** |
-| `agent extra` | Agent produced something the human did not — **usually remediation working correctly** |
-
-**Phase 1 acceptance target: ≥ 90%.** Exit code `3` if below.
-
-**Read `agent extra` carefully.** It is not automatically a failure. If the
-agent emits a `NetworkPolicy` or adds `readinessProbe` blocks the human branch
-lacks, that is remediation doing its job. Only `MISSING` entries are
-unambiguous regressions.
-
-This step is what converts "we built an AI agent" into a defensible,
-quantified claim.
 
 ---
 
@@ -327,7 +185,7 @@ quantified claim.
 | `NEEDS_REVIEW` | 0 | No blockers, but human judgement or TBC values outstanding |
 | `BLOCK` | 2 | Blocking defects must be resolved before deployment |
 
-**The demo returns `BLOCK`, and that is the point.**
+**The sample migration still returns `BLOCK`, and that is the point.**
 
 Running against `BillingDevOps_PDFGenerator@master`, the agent should flag:
 
@@ -410,7 +268,7 @@ local `./ocp` folder if one exists — a convenient standing spot to drop or
 check out the repo you're migrating (mirrors `./aks`, the output folder).
 
 **Precedence, low to high:** hardcoded default → `migration.env` → an
-explicit shell env var for that one invocation. So `ENV=stg ./run.sh demo`
+explicit shell env var for that one invocation. So `ENV=stg ./run.sh migrate`
 still overrides `ENV=int` in the file, and a CLI path argument
 (`./run.sh migrate /some/other/path`) still overrides `REPO=`.
 
@@ -454,7 +312,7 @@ llm:
 Then, for a hosted provider:
 ```bash
 cp .env.example .env       # add LLM_ENDPOINT and LLM_API_KEY
-./run.sh demo
+./run.sh migrate /path/to/your/repo
 ```
 
 The engine only ever calls the `LLMProvider` interface (`complete`, `embed`).
@@ -608,12 +466,9 @@ This writes `aks/migration_workbook.md` (for the PR/review) and
 |---|---|---|---|
 | `./run.sh build` | yes | Docker image | Build the toolbox |
 | `./run.sh selftest` | no | – | Verify config + tooling |
-| `./run.sh fetch` | yes | `tests/fixtures/` | Pull the golden pair |
-| `./run.sh demo` | minimal | `aks/` | Run the migration |
 | `./run.sh migrate [path-or-url]` | minimal | `aks/` | Run against a real checkout, git URL, or `REPO`/`./ocp` |
 | `./run.sh workbook [intake.txt]` | no | `aks/migration_workbook.{md,csv}` | Build the migration workbook |
 | `./run.sh report` | no | – | Print the report |
-| `./run.sh golden` | no | `aks/golden.json` | Score vs the human branch |
 | `./run.sh clean` | no | removes `aks/` | Reset |
 
 ---
@@ -626,13 +481,10 @@ This writes `aks/migration_workbook.md` (for the PR/review) and
 | `Permission denied` on `./run.sh` | Permission bit not persisted | `bash run.sh <command>` |
 | `docker: command not found` | Docker Desktop not running | Start Docker Desktop, verify with `docker version` |
 | `COPY policy: not found` during build | `policy/aks.rego` missing | Save the file, re-run `build` |
-| `Fixtures missing` | `fetch` not yet run | `./run.sh fetch` |
 | Mount errors / mangled paths | Git Bash path conversion | `run.sh` sets `MSYS_NO_PATHCONV=1`; if invoking Docker directly, prefix the same |
 | `git clone` authentication failure | HTTPS vs SSH | Switch the clone URL in `run.sh` to SSH, or use an SSH `REPO=git@github.com:...` in `migration.env` |
 | `usage: ./run.sh migrate <path-or-git-url>` | No path given, `REPO=` unset in `migration.env`, and no `./ocp` folder | Pass a path/URL, set `REPO=`, or check out your repo into `./ocp` |
-| Golden score under 90% | Fixtures absent, or genuine gap | Confirm `fetch` ran; inspect `MISSING` rows only |
 | Exit code 2 | `BLOCK` verdict | Expected on `master`. Read `validation.md` |
-| Exit code 3 | Golden below target | Inspect the golden table |
 | Workbook row stuck on `NEEDS_INPUT` | Missing namespace/deployment, or an unrecognised storage/service type | Fill the gap in the intake file, or add a matching entry to `config/mappings.yaml` |
 | `LLM provider 'ollama' is not available` | Ollama daemon not running, model not pulled, or wrong `LLM_ENDPOINT` | `ollama serve` + `ollama pull <model>`; from a container, endpoint must be `http://host.docker.internal:11434`, not `localhost` |
 | LLM calls hang or return `403` unexpectedly | A machine-wide `HTTP_PROXY`/`HTTPS_PROXY` intercepting local traffic | The Ollama provider already bypasses the proxy for its own calls; confirm the daemon itself is reachable with `curl` first |
