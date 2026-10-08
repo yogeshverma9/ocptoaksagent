@@ -26,7 +26,7 @@ environments:
   #   aksTargetClusterName: aks-bil-app-test-nzn-001
   #   kubernetesNamespace: pdfgenerator-int
   #   valuesFile: int_values.yaml
-  #   ingressHost: billing-pdfgenerator-int.apps.bil.test.aks.internal.spark.co.nz
+  #   ingressHost: billing-pdfgenerator-int.apps.bil.test.aks.example.com
   #   legacyOcpEnv: npe04
   #   dependsOn: [dev]
   #   status: MIGRATED
@@ -40,7 +40,7 @@ environments:
   #   aksTargetClusterName: aks-bil-app-stage-nzn-001
   #   kubernetesNamespace: pdfgenerator-nft
   #   valuesFile: nft_values.yaml
-  #   ingressHost: billing-pdfgenerator-nft.apps.bil.stg.aks.internal.spark.co.nz
+  #   ingressHost: billing-pdfgenerator-nft.apps.bil.stg.aks.example.com
   #   legacyOcpEnv: npe04
   #   dependsOn: [dev]
   #   status: MIGRATED

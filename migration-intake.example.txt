@@ -16,7 +16,7 @@
 
 Namespace: billing-prod
 Deployment: pdfgenerator
-Route: pdfgenerator.apps.prod05.ocp.internal.spark.co.nz
+Route: pdfgenerator.apps.prod05.ocp.example.com
 Service Type: External
 PVC: pdfgen-data-pvc
 Storage Type: RWX
@@ -28,7 +28,7 @@ Risks: Shared PVC across 3 replicas; confirm Azure Files performance tier
 
 Namespace: billing-int
 Deployment: pdfgenerator
-Route: pdfgenerator-int.apps.npe04.ocp.internal.spark.co.nz
+Route: pdfgenerator-int.apps.npe04.ocp.example.com
 Service Type: Internal
 PVC:
 Storage Type: RWO

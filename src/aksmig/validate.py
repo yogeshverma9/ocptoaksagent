@@ -121,7 +121,7 @@ def validate(rendered: Path, cfg, envs: list[dict], mode: str) -> list[Finding]:
                 text = path.read_text(encoding="utf-8")
             except OSError:
                 continue
-            for m in re.finditer(r"\S*\.ocp\.internal\.spark\.co\.nz\S*", text):
+            for m in re.finditer(r"\S*\.ocp\.example\.com\S*", text):
                 line = text[: m.start()].count("\n") + 1
                 findings.append(Finding(
                     "V6", "Residual OpenShift hostname after migration",

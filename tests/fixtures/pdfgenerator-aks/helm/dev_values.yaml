@@ -26,7 +26,7 @@ largeInvoicesDeployment:
   namespace: pdfgenerator
 
 image:
-  repository: billing-container-registry.artifacts.internal.spark.co.nz/pdfgenerator
+  repository: billing-container-registry.artifacts.example.com/pdfgenerator
   pullPolicy: Always
 
 service:
@@ -48,11 +48,11 @@ hpa:
   targetCPUUtilizationPercentage: 75
 
 route:
-  host: billing-pdfgenerator.apps.bil.dev.aks.internal.spark.co.nz
+  host: billing-pdfgenerator.apps.bil.dev.aks.example.com
 
 envVars:
   - name: PEPPOL_CONVERTER_API_URL
-    value: "http://billing-peppolconverter.apps.dev01.ocp.internal.spark.co.nz/v1/p\
+    value: "http://billing-peppolconverter.apps.dev01.ocp.example.com/v1/p\
       eppolConversionTrigger"
   - name: API_CONNECT_URL
     value: "https://apigw-test.spark.co.nz/spark/bill/image/<uuid>?client_id=<clien\

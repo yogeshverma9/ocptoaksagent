@@ -1,4 +1,4 @@
-FROM docker-public.artifacts.internal.spark.co.nz/ubi9/nodejs-20-minimal:latest
+FROM docker-public.artifacts.example.com/ubi9/nodejs-20-minimal:latest
 USER root:root
 
 RUN npm config set proxy http://cicdnexus/repository/npm-proxy/ && \

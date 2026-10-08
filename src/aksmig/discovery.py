@@ -19,7 +19,7 @@ OCP_MARKERS = {
     "HelmDeploy@0": "Azure DevOps OCP-era Helm task",
     "kubernetesServiceEndpoint": "OCP service connection",
     "autoscaling/v1": "Deprecated HPA API",
-    ".ocp.internal.spark.co.nz": "OpenShift cluster DNS",
+    ".ocp.example.com": "OpenShift cluster DNS",
     "ocp-billing-invserv1": "OpenShift build agent pool",
     "openshift.io/host.generated": "OpenShift-generated route host",
 }

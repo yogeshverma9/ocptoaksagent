@@ -11,7 +11,7 @@ from .models import WORKBOOK_COLUMNS, WorkbookRow
 #
 #   Namespace: billing-prod
 #   Deployment: pdfgenerator
-#   Route: pdfgenerator.apps.prod05.ocp.internal.spark.co.nz
+#   Route: pdfgenerator.apps.prod05.ocp.example.com
 #   PVC: pdfgen-data-pvc
 #   Storage Type: RWX
 #   Database: postgres-prod (external)

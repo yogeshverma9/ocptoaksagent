@@ -43,7 +43,7 @@ secrets:
     - TBC
 
 registry:
-  legacy: billing-container-registry.artifacts.internal.spark.co.nz
+  legacy: billing-container-registry.artifacts.example.com
   target: TBC_ACR_NAME.azurecr.io
   requireImagePullSecret: true
 
@@ -64,8 +64,8 @@ pipeline:
     - --history-max 3
 
 dns:
-  legacyPattern: '(?P<app>[a-z0-9-]+)\.apps\.(?P<env>[a-z0-9]+)\.ocp\.internal\.spark\.co\.nz'
-  targetTemplate: '{app}.apps.bil.{tier}.aks.internal.spark.co.nz'
+  legacyPattern: '(?P<app>[a-z0-9-]+)\.apps\.(?P<env>[a-z0-9]+)\.ocp\.example\.com'
+  targetTemplate: '{app}.apps.bil.{tier}.aks.example.com'
   scanEnvVarsForResidualOcp: true
 
 forbiddenApiVersions:

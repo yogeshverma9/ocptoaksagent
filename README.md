@@ -200,7 +200,7 @@ Seven stages execute in order:
 
 | # | Stage | What happens |
 |---|---|---|
-| 1 | **DISCOVER** | Walks `/workspace`, classifies every YAML and Dockerfile, scores OpenShift coupling by scanning for markers (`route.openshift.io`, `HelmDeploy@0`, `autoscaling/v1`, `.ocp.internal.spark.co.nz`, …). Also detects whether the source is a **Helm chart** (`Chart.yaml`/`templates/…{{ }}` markers present) or **plain manifests**, which some transforms branch on. |
+| 1 | **DISCOVER** | Walks `/workspace`, classifies every YAML and Dockerfile, scores OpenShift coupling by scanning for markers (`route.openshift.io`, `HelmDeploy@0`, `autoscaling/v1`, `.ocp.example.com`, …). Also detects whether the source is a **Helm chart** (`Chart.yaml`/`templates/…{{ }}` markers present) or **plain manifests**, which some transforms branch on. |
 | 2 | **TRANSFORM** | Applies rules **T1–T12** — make it AKS-native |
 | 3 | **REMEDIATE** | Applies rules **M1–M9** — fix latent defects OCP tolerated but AKS will reject |
 | 4 | **REFINE (LLM)** | The model reviews every file TRANSFORM/REMEDIATE touched and may rewrite it — mandatory, every run (see [`AGENTIC_FRAMEWORK.md`](AGENTIC_FRAMEWORK.md)) |
@@ -338,7 +338,7 @@ Running against `BillingDevOps_PDFGenerator@master`, the agent should flag:
 | **M3** | A real production `API_CONNECT_CLIENT_ID` value is committed to `prd_values.yaml` |
 | **M7** | No liveness or readiness probes on any Deployment — `--atomic` rollback is therefore unreliable |
 | **M8** | `Dockerfile` uses `USER root` and `chmod -R 777` — AKS Pod Security Admission will reject it |
-| **V6** | Residual `*.ocp.internal.spark.co.nz` hostnames remain in `dev_values.yaml` and `int_values.yaml` |
+| **V6** | Residual `*.ocp.example.com` hostnames remain in `dev_values.yaml` and `int_values.yaml` |
 
 The headline is not that the agent migrates YAML. It is that a careful,
 manually executed, already-deployed migration still left production-blocking
@@ -564,7 +564,7 @@ comments:
 ```text
 Namespace: billing-prod
 Deployment: pdfgenerator
-Route: pdfgenerator.apps.prod05.ocp.internal.spark.co.nz
+Route: pdfgenerator.apps.prod05.ocp.example.com
 Service Type: External
 PVC: pdfgen-data-pvc
 Storage Type: RWX
@@ -667,7 +667,7 @@ This writes `aks/migration_workbook.md` (for the PR/review) and
 Four values are `TBC` in `config/env-matrix.yaml` and `config/standards.yaml`.
 The agent reports them as `NEEDS_INPUT` rather than guessing:
 
-1. **Target ACR name** — replacing `billing-container-registry.artifacts.internal.spark.co.nz`
+1. **Target ACR name** — replacing `billing-container-registry.artifacts.example.com`
 2. **STG subscription / resource group / cluster** — the STG stage is commented
    out on the migration branch and was never migrated
 3. **PRD ingress host** — `master` uses `prod05.ocp`; no AKS equivalent exists yet

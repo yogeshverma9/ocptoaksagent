@@ -24,7 +24,7 @@ transform:
     severity: HIGH
   - id: T6
     name: dns-remap
-    description: "*.ocp.internal.spark.co.nz becomes *.aks.internal.spark.co.nz"
+    description: "*.ocp.example.com becomes *.aks.example.com"
     severity: BLOCK
   - id: T7
     name: env-matrix-expand
